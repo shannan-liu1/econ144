@@ -1,0 +1,143 @@
+---
+title: "ECON 144: Project 1"
+author: "Zach Wrubel, Austin Pham, Shannon"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+```
+
+# I) Introduction
+
+Apple is a multinational technology company, listed on the NASDAQ stock exchange, that specializes in consumer electronics, computer software and online services. We pulled our data from Yahoo Finance consisting of the weekly stock prices of APPL over the past 10 years, starting from January 1, 2010 until present day.
+
+As you will see notice later, the APPL time series object itself has very insignificant partial autocorrelations making an autoregressive model hard to fit. This is inline with the classical challenge of predicting the volatile nature of stock prices. To help solve this, we decided to take other relevant semiconductor companies to supplement out model with distributed lags.
+
+The three main companies of focus were ON Semiconductor, VanEck Semiconductor ETF, and Taiwan Semiconductor. Semiconductors are used within many electronic appliances and are a vital eletronic component in the modern technologies that we use today. The number of transistors on an integrated  circuit has roughly doubled every two years for the past fifty years, in line with Moore's Law.
+     
+According to the International Roadmap for Devices and Systems released in 2020, new semiconductor applications are now driving technological development and creating new innovation.We wanted to track the relationship between parallel industries of the growing semiconductor industry and its affect on a multinational technology company like Apple. 
+     
+```{r}
+appl <-  read.csv("AAPL.csv", sep = ",")
+on <-  read.csv("ON.csv", sep = ",")
+smh <-  read.csv("SMH.csv", sep = ",")
+tsm <-  read.csv("TSM.csv", sep = ",")
+
+appl_ts <- ts(appl[, 5], start = 2010, freq = 52)
+on_ts <- ts(on[, 5], start = 2010, freq = 52)
+smh_ts <- ts(smh[, 5], start = 2010, freq = 52)
+tsm_ts <- ts(tsm[, 5], start = 2010, freq = 52)
+```
+
+# II) Results 
+
+## 1) Modeling and Forecasting Trend
+
+### A) Time-Series Plot
+
+```{r}
+par(mfrow = c(2, 2))
+plot(appl_ts,
+     xlab = "Time (Year)",
+     ylab = "Price USD",
+     main = "Apple Stock")
+plot(on_ts,
+     xlab = "Time (Year)",
+     ylab = "Price USD",
+     main = "ON Semiconductor Stock")
+plot(smh_ts,
+     xlab = "Time (Year)",
+     ylab = "Price USD",
+     main = "VanEck Semiconductor ETF")
+plot(tsm_ts,
+     xlab = "Time (Year)",
+     ylab = "Price USD",
+     main = "Taiwan Semiconductor")
+```
+
+### B) Covariance Stationary
+
+The Apple time series does not appear to be covariance stationary. The object is not mean reverting as each random variable appears to have non-constant means. This can be seen in the positive linear trend in the time series. Additionally, it appears that the variance structure is not constant over time as well. Starting at around year 2018-2019, we can see a drastic increase in fluctuation overall. This is contrasted to the slow, steady, lienar growth of Apple in the years prior.
+
+### C) Autocorrelation & Partial ACF
+
+As expected in a time series involving a stock price, the Autocorrelation graph shows highly correlated lags. This is of no surprise, especially since we are observing at a weekly periodicity. The stock price a week ago should be highly correlated to the stock price now. That affect is only compounded across several months and years. 
+
+Regarding the Partial Autocorrelation graph, we can see that there are no individual lags that are statistically significant. This signifies that though previous stock prices are overall correlated to stock prices now, we cannot firmly attribute any one lag to the overall stock price now. This is the nature of stock prices and is the reason as to why it is so hard to model. 
+
+```{r}
+par(mfrow = c(1, 2))
+acf(appl_ts, main = "Autocorrelation")
+pacf(appl_ts, main = "Partial Autocorrelation")
+```
+
+### D) Linear & Nonlinear Models
+
+```{r}
+t <- seq(2010, 2022, length = length(appl_ts))
+m1 <- lm(appl_ts ~ t)
+m2 <- lm(appl_ts ~ t + I(t ^ 2))
+m3 <- lm(log(appl_ts) ~ t)
+ds <- data.frame(x = t, y = appl_ts)
+m4 <- nls(y ~ exp(a + b * t), data = ds, start = list(a = 0, b = 0))
+
+summary(m1)
+summary(m2)
+summary(m3)
+summary(m4)
+
+par(mfrow = c(2, 2))
+plot(appl_ts,
+     xlab = "Time (Year)",
+     ylab = "Price USD",
+     main = "Linear Model")
+lines(t, m1$fit, col = "skyblue", lwd = 2)
+
+plot(appl_ts,
+     xlab = "Time (Year)",
+     ylab = "Price USD",
+     main = "Quadratic Model")
+lines(t, m2$fit, col = "skyblue", lwd = 2)
+
+plot(appl_ts,
+     xlab = "Time (Year)",
+     ylab = "Price USD",
+     main = "Log Linear Model")
+lines(t, m3$fit, col = "skyblue", lwd = 2)
+
+plot(appl_ts,
+     xlab = "Time (Year)",
+     ylab = "Price USD",
+     main = "Exponential Model")
+lines(ds$x, predict(m4, list(x = ds$x)), col = "skyblue", lwd = 2)
+
+hw <- HoltWinters(appl_ts)
+plot(appl_ts, xlab = "Time (Year)", ylab = "Price USD")
+lines(hw$fitted[, 1], col = "skyblue")
+hw_res <- appl_ts - hw$fitted[, 1]
+plot(hw_res,
+     ylab = "Residuals",
+     type = 'l',
+     xlab = "Time (Year)")
+acf(hw$fitted[, 1] - appl_ts)
+pacf(hw$fitted[, 1] - appl_ts)
+```
+
+## 2) Trend and Seasonal Adjustments
+
+
+# III) Conclusions & Future Work
+
+# IV) References
+
+https://irds.ieee.org/topics/new-semiconductor-technologies-and-applications
+
+https://www.synopsys.com/glossary/what-is-moores-law.html#:~:text=Moore's%20law%20is%20a%20term,doubles%20about%20every%20two%20years.
+
+https://irds.ieee.org/editions/2020
+
+
+
+# V) R Source Code
