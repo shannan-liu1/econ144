@@ -270,9 +270,9 @@ tsdisplay(detrend_seas_adj_appl,
 
 The residuals plot exhibits heteroskedasticity, and it looks like it can be modelled to a certain extent. The ACF and PACF plots of the residuals affirm this visual intuition, showing that there is still structure to our data. In particular, the ACF correlogram shows evidence of significant autocorrelation beyond 100 weeks. Meanwhile the PACF also shows some significant correlations, albeit not as strong as the ACF graph. These graphs indicate that additive decomposition does not fully capture the patterns exhibited in Apple's weekly adjusted closing price. 
 
-### A) Perform a multiplicative decomposition of your series
+### B) Perform a multiplicative decomposition of your series
 ```{r}
-# Perform additive decomposition and plot the decomposition
+# Perform multiplicative decomposition and plot the decomposition
 m_dcmp = decompose(appl_ts, "multiplicative")
 autoplot(m_dcmp)
 
