@@ -1,0 +1,291 @@
+---
+title: "Econ 144 Project 2"
+author: "Shannan Liu, Austin Pham, Zach Wrubel"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+fontfamily: mathpazo
+output:
+  pdf_document:
+    toc: true
+  fig_caption: yes
+  highlight: haddock
+  number_sections: true
+  df_print: paged
+fontsize: 10.5pt
+editor_options:
+chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+library(tseries)
+library(forecast)
+library(stats)
+library(stats4)
+library(TSA)
+library(timeSeries)
+library(fUnitRoots)
+library(fBasics)
+library(tseries)
+library(timsac)
+library(TTR)
+library(strucchange)
+library(tis)
+library(zoo)
+library(gridExtra)
+```
+
+\newpage
+# I. Introduction  
+
+This project contains on 2 components. First, we will fit forecasting models with a trend, seasonal dummies, and cycles to each of the time series variables. Then, we will fit VAR models to the data and regress each series on the other series and itself.
+
+In part 1 of the project, we aim to determine time dependent models that can capture the stochastic movements of each of the series. In part 2, we investigate whether or not the addition of other regressors can improve the forecasting performance of the purely time dependent models.
+
+## Brief Background on Data:
+Sleep Number Corporation (SNBR) is a retail and wholesale company headquartered in Minneapolis that designs, manufactures, and sells a line of air bed mattresses. They provide a variety of beds, bedding, pillows, mattresses, sheets, and duvets for both adults and children. The company also sells other bedding furniture and accessories, and its business is focused on consumers in the United States.
+
+Tupperware Brands Corporation (TUP) is consumer discretionary products company headquartered in Florida. They own a portfolio of global direct selling companies which sell products across multiple brands and categories through an independent sales force. The Company's product brands and categories include food preparation, storage, and serving solutions for the kitchen and home. Tupperware Brands also sells beauty and personal care products.
+
+The S&P 500 Index is a capitalization-weighted index of 505 companies in the US with the highest market capitalization. It is widely regarded as the best gauge of large-cap US equities and serves as a benchmark for many investors. It also includes a wide variety of companies from different industries and sectors, and it captures 80% of total market capitalisation in the US.
+
+SNBR and TUP are related to each other because they are both based in the US and sell durable consumer goods (although Tupperware Brands also sells non-durable goods). Therefore, it may be interesting to map our their relationship through the VAR models. These companies are also affected by broader US market movements. Hence, we include the S&P 500 to track that relationship.
+
+## Source of Data
+All of the data was sourced from https://finance.yahoo.com/. We will be analyzing weekly observations of the data from December 20, 2010 to February 8, 2022. Company descriptions were adapted from descriptions provided at https://bloomberg.com.
+
+
+```{r}
+# import data
+snbr = get.hist.quote("SNBR", start = "2010-12-20", end = "2022-02-08",
+                     quote=c("Close"),provider = "yahoo",
+                     compression = 'w')
+tup = get.hist.quote("TUP", start = "2010-12-20", end = "2022-02-08",
+                       quote=c("Close"),provider = "yahoo",
+                     compression = 'w')
+sp500 = get.hist.quote("^gspc", start = "2010-12-20", end = "2022-02-08",
+                       quote=c("Close"),provider = "yahoo",
+                     compression = 'w')
+
+# there are no NA values 
+cat("Number of NA values in SNBR series:",sum(is.na(snbr)),"\n")
+cat("Number of NA values in TUP series:",sum(is.na(tup)),"\n")
+cat("Number of NA values in S&P 500 series:",sum(is.na(sp500)))
+
+# create data frame in case we may need it later
+df = data.frame(merge(snbr,tup,sp500))
+df <- tibble::rownames_to_column(df,"dates")
+df$dates<-as.Date(df$dates,"%Y-%m-%d")
+
+# check
+head(df)
+```
+
+\newpage
+# II. Results  
+
+## (A) Produce a time-series plot of your data including the respective ACF and PACF plots.  
+```{r}
+library(glue)
+tsplot <- function(y,series_name) {
+  #################################
+  # Plot the original time series 
+  # A histogram of the series     
+  # ACF and PACF plots
+  #################################
+  ax1 = autoplot.zoo(y, main = sprintf("%s Closing Price",series_name),
+         ylab = "Price (USD)",xlab = "Time")
+  `Closing Price` = y
+  ax2 = gghistogram(`Closing Price`)
+  ax3 = ggAcf(y,
+              main = glue('{series_name} Sample Autocorrelations'),
+              xlab="Displacement",lag.max = 48)
+  ax4 = ggPacf(y,
+               main = glue('{series_name} Sample Partial Autocorrelations'),
+               xlab="Displacement",lag.max = 48)
+  grid.arrange(ax1, ax2,ax3,ax4, ncol=2,nrow = 2)
+}
+
+# time-series, histogram, ACF and PACF plots
+tsplot(snbr,"SNBR")
+tsplot(tup,"TUP")
+tsplot(sp500,"S&P 500")
+```
+
+## (B) Plot the stldecomposition plot of your data, and discuss the results.  
+```{r}
+# create the time series objects of the closing prices
+# set frequency = 52 (roughly 52 weeks in a year)
+snbr_ts = ts(snbr$Close, start = c(2010,12,20),frequency = 52)
+tup_ts = ts(tup$Close, start = c(2010,12,20),frequency = 52)
+sp500_ts = ts(sp500$Close, start = c(2010,12,20),frequency = 52)
+
+autoplot(stl(snbr_ts,s.window = "periodic",robust=TRUE),
+     main = "SNBR: STL Decomposition")
+autoplot(stl(tup_ts,s.window = "periodic",robust=TRUE),
+     main = "TUP STL Decomposition")
+autoplot(stl(sp500_ts,s.window = "periodic",robust=TRUE),
+     main = "S&P 500 STL Decomposition")
+```
+
+
+Each decomposition shows that the the time series have significant trend, seasonality, and cycle components. Morever, it shows that each series is not covariance stationary, which we will need to consider when producing models.
+
+SNBR's price trend is mostly upward with some drift at the end of the observed time period. The seasonality of the data looks quite consistent over time, and there are significant cycles in the data, particularly in the last 4 years of the time series.
+
+TUP's price follows a downward trend with some drift. Generally, it fluctuates more than the trend of SNBR's price. The seasonality of the data exhibits more persistence than SNBR's, and it looks consistent over time. The cycles in TUP's price data are very clear and much more significant than what can be observed in SNBR's remainders.
+
+S&P 500's price trend is quite linear and upward sloping. The seasonality of the data looks persistent and consistent over time, and there is significant evidence of cycles in the residuals data, particularly in the last 4 years of the time series.
+
+## (C) & (E): Fit a model that includes, trend, seasonality, and cyclical components. Then plot the ACF and PACF of the respective residuals and interpret the plots.
+
+To capture the complex dynamics of the series, we will be fitting an ARIMA model to each of them.
+
+### SNBR Price  
+
+```{r SNBR modelling}
+m1 <- auto.arima(snbr_ts)
+summary(m1)
+```
+
+The model for the price of SNBR is ARIMA (2,1,0) + weekly Seasonal-ARIMA(0,0,2). The I = 1 affirms that the data is not covariance stationary, which is important when modelling with short-term memory processes such as AR and MA processes. 
+
+The seasonality of the data is captured by the seasonal component of the model. Specifically, it is taken care of by an S-MA(1). The trend of the series is taken care of by the first differencing I(1), and the cycles of the data are modelled by an AR(2) process.
+
+```{r}
+ggtsdisplay(resid(m1))
+```
+
+The plot of the residuals appears to retain some structure which can be modelled. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the ARIMA(2,1,0) + S-ARIMA(0,0,1) model fits the data quite well.
+
+### TUP Price  
+
+```{r TUP modelling}
+m2 <- auto.arima(tup_ts)
+summary(m2)
+```
+
+The model for the price of TUP is ARIMA (1,1,2) + weekly Seasonal-ARIMA(1,0,0). The I = 1 affirms that the data is not covariance stationary, which is important when modelling with short-term memory processes such as AR and MA processes. 
+
+The seasonality of the data is captured by the seasonal component of the model. Specifically, it is taken care of by an S-AR(1) process. The trend of the series is taken care of by the first differencing I(1), and the cycles of the data are modelled by an ARMA(1,2) process.
+
+```{r}
+ggtsdisplay(resid(m2))
+```
+
+The plot of the residuals appears to have no structure. This intuition is affirmed by the ACF and PACF plots which do not have significant spikes. Thus, the ARIMA (1,1,2) + S-ARIMA(1,0,0) model fits the data very well.
+
+
+### S&P 500 Price  
+
+```{r}
+m3 <- auto.arima(sp500_ts)
+summary(m3)
+```
+
+The model for the price of the S&P 500 is ARIMA(0,1,1) + drift. The drift suggests that there is a non-intercept for our model's fit. The I = 1 affirms that the data is not covariance stationary, which is important when modelling with short-term memory processes such as AR and MA processes. 
+
+There is no seasonal component in this model, suggesting that the seasonality is correctly captured by the ARIMA(0,1,1) model.  The trend of the series is taken care of by the first differencing I(1), and the cycles of the data are modelled by an MA(1) process.
+
+```{r}
+ggtsdisplay(resid(m3))
+```
+
+The plot of the residuals appears to retain some structure which can be modelled. The residuals are also heteroskedastic. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the ARIMA(0,1,1) + drift model fits the data quite well.
+
+## (D) Plot the respective residuals vs. fitted values and discuss your observations.
+
+### SNBR Model Residuals vs Fit
+```{r}
+plot_resid_fit <- function(x,y) {
+  data = data.frame(x = x, y = y)
+
+  p <- ggplot(data, aes(x =  x, y = y)) +
+    geom_smooth(method = "lm", se=T,
+                col = "red",
+                formula = y ~ x,
+                show.legend = T) + 
+    geom_point(alpha = 0.5,size = 2,
+               col = "black") +
+    xlab("Fit") + ylab("Residuals") +
+    ggtitle("Residuals vs Fit") 
+    
+  return(p)
+}
+
+plot_resid_fit(fitted(m1),resid(m1))
+```
+
+There is not much of a linear relationship between the fit and the residuals, suggesting affirming that our model's fit did pretty well.
+
+### TUP Model Residuals vs Fit  
+```{r}
+plot_resid_fit(fitted(m2),resid(m2))
+```
+
+There is basically no linear relationship between the residuals and the fitted data. Therefore, our model for TUP prices did exceptionally well.
+
+### S&P 500 Model Residuals vs Fit  
+```{r}
+plot_resid_fit(fitted(m3),resid(m3))
+```
+
+There is also, no linear relationship between the residuals and the fit of the model fitted to the S&P 500 price series. Therefore, our ARIMA model for this data did very well in fitting the series
+
+## (F) Plot the respective CUSUM and interpret the plot.  
+```{r}
+
+```
+
+## (G) For your model, discuss the associated diagnostic statistics.  
+```{r}
+
+```
+
+## (H) Use your model to forecast 12-steps ahead. Your forecast should include the respective error bands.  
+```{r}
+
+```
+
+## (I) Compare your forecast from (i) to the 12-steps ahead forecasts from ARIMA, Holt-Winters, and ETS models. Which model performs best in terms of MAPE?  
+```{r}
+
+```
+
+## (J) Combine the four forecasts and comment on the MAPE from this forecasts vs., the individual ones.  
+```{r}
+
+```
+
+## (K) Fit an appropriate VAR model using your two variables. Make sure to show the relevant plots and discuss your results from the fit.  
+```{r}
+
+```
+
+
+## (L) Compute, plot, and interpret the respective impulse response functions.  
+```{r}
+
+```
+
+
+## (M) Perform a Granger-Causality test on your variables and discuss your results from the test.  
+```{r}
+
+```
+
+
+## (N) Use your VAR model to forecast 12-steps ahead. Your forecast should include the respective error bands. Comment on the differences between the VAR forecast and the other ones obtained using the different methods.  
+```{r}
+
+```
+
+
+\newpage
+# III. Conclusions and Future Work  
+
+\newpage
+# IV. References  
+
+\newpage
+# V. R Source Code  
