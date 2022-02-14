@@ -300,7 +300,7 @@ The fluctuation process is near 0 the entire time and though it drifts pretty fa
 ## (H) For your model, discuss the associated diagnostic statistics.  
 
 ```{r}
-summary(m1)
+summary(m1) # LOOK AT SUMMARY first then residuals
 Box.test(m1$residuals, type = "Ljung-Box")
 ```
 
@@ -344,6 +344,8 @@ plot(ets_f1)
 summary(ari_f1)
 summary(hw_f1)
 summary(ets_f1)
+
+# USE ACCURACY
 ```
 
 
