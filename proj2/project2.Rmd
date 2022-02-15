@@ -33,7 +33,6 @@ library(strucchange)
 library(tis)
 library(zoo)
 library(gridExtra)
-library(ggplot2)
 ```
 
 \newpage
@@ -48,7 +47,7 @@ Sleep Number Corporation (SNBR) is a retail and wholesale company headquartered 
 
 Tupperware Brands Corporation (TUP) is consumer discretionary products company headquartered in Florida. They own a portfolio of global direct selling companies which sell products across multiple brands and categories through an independent sales force. The Company's product brands and categories include food preparation, storage, and serving solutions for the kitchen and home. Tupperware Brands also sells beauty and personal care products.
 
-The S&P 500 Index is a capitalization-weighted index of 505 companies in the US with the highest market capitalization. It is widely regarded as the best gauge of large-cap US equities and serves as a benchmark for many investors. It also includes a wide variety of companies from different industries and sectors, and it captures 80% of total market capitalization in the US.
+The S&P 500 Index is a capitalization-weighted index of 505 companies in the US with the highest market capitalization. It is widely regarded as the best gauge of large-cap US equities and serves as a benchmark for many investors. It also includes a wide variety of companies from different industries and sectors, and it captures 80% of total market capitalisation in the US.
 
 SNBR and TUP are related to each other because they are both based in the US and sell durable consumer goods (although Tupperware Brands also sells non-durable goods). Therefore, it may be interesting to map our their relationship through the VAR models. These companies are also affected by broader US market movements. Hence, we include the S&P 500 to track that relationship.
 
@@ -56,110 +55,79 @@ SNBR and TUP are related to each other because they are both based in the US and
 All of the data was sourced from https://finance.yahoo.com/. We will be analyzing weekly observations of the data from December 20, 2010 to February 8, 2022. Company descriptions were adapted from descriptions provided at https://bloomberg.com.
 
 
-```{r message=FALSE, warning=FALSE}
+```{r}
 # import data
-snbr = get.hist.quote(
-  "SNBR",
-  start = "2010-12-20",
-  end = "2022-02-08",
-  quote = c("Close"),
-  provider = "yahoo",
-  compression = 'w'
-)
-tup = get.hist.quote(
-  "TUP",
-  start = "2010-12-20",
-  end = "2022-02-08",
-  quote = c("Close"),
-  provider = "yahoo",
-  compression = 'w'
-)
-sp500 = get.hist.quote(
-  "^gspc",
-  start = "2010-12-20",
-  end = "2022-02-08",
-  quote = c("Close"),
-  provider = "yahoo",
-  compression = 'w'
-)
+snbr = get.hist.quote("SNBR", start = "2010-12-20", end = "2022-02-08",
+                     quote=c("Close"),provider = "yahoo",
+                     compression = 'w')
+tup = get.hist.quote("TUP", start = "2010-12-20", end = "2022-02-08",
+                       quote=c("Close"),provider = "yahoo",
+                     compression = 'w')
+sp500 = get.hist.quote("^gspc", start = "2010-12-20", end = "2022-02-08",
+                       quote=c("Close"),provider = "yahoo",
+                     compression = 'w')
 
-# there are no NA values
-cat("Number of NA values in SNBR series:", sum(is.na(snbr)), "\n")
-cat("Number of NA values in TUP series:", sum(is.na(tup)), "\n")
-cat("Number of NA values in S&P 500 series:", sum(is.na(sp500)))
+# there are no NA values 
+cat("Number of NA values in SNBR series:",sum(is.na(snbr)),"\n")
+cat("Number of NA values in TUP series:",sum(is.na(tup)),"\n")
+cat("Number of NA values in S&P 500 series:",sum(is.na(sp500)))
 
 # create data frame in case we may need it later
-df = data.frame(merge(snbr, tup, sp500))
-df <- tibble::rownames_to_column(df, "dates")
-df$dates <- as.Date(df$dates, "%Y-%m-%d")
+df = data.frame(merge(snbr,tup,sp500))
+df <- tibble::rownames_to_column(df,"dates")
+df$dates<-as.Date(df$dates,"%Y-%m-%d")
 
 # check
 head(df)
 ```
 
 \newpage
-
 # II. Results  
 
 ## (A) Produce a time-series plot of your data including the respective ACF and PACF plots.  
-```{r message=FALSE, warning=FALSE}
+```{r}
 library(glue)
-tsplot <- function(y, series_name) {
+tsplot <- function(y,series_name) {
   #################################
-  # Plot the original time series
-  # A histogram of the series
+  # Plot the original time series 
+  # A histogram of the series     
   # ACF and PACF plots
   #################################
-  ax1 = autoplot.zoo(
-    y,
-    main = sprintf("%s Closing Price", series_name),
-    ylab = "Price (USD)",
-    xlab = "Time"
-  )
+  ax1 = autoplot.zoo(y, main = sprintf("%s Closing Price",series_name),
+         ylab = "Price (USD)",xlab = "Time")
   `Closing Price` = y
   ax2 = gghistogram(`Closing Price`)
-  ax3 = ggAcf(
-    y,
-    main = glue('{series_name} Sample Autocorrelations'),
-    xlab = "Displacement",
-    lag.max = 48
-  )
-  ax4 = ggPacf(
-    y,
-    main = glue('{series_name} Sample Partial Autocorrelations'),
-    xlab = "Displacement",
-    lag.max = 48
-  )
-  grid.arrange(ax1, ax2, ax3, ax4, ncol = 2, nrow = 2)
+  ax3 = ggAcf(y,
+              main = glue('{series_name} Sample Autocorrelations'),
+              xlab="Displacement",lag.max = 48)
+  ax4 = ggPacf(y,
+               main = glue('{series_name} Sample Partial Autocorrelations'),
+               xlab="Displacement",lag.max = 48)
+  grid.arrange(ax1, ax2,ax3,ax4, ncol=2,nrow = 2)
 }
 
 # time-series, histogram, ACF and PACF plots
-tsplot(snbr, "SNBR")
-tsplot(tup, "TUP")
-tsplot(sp500, "S&P 500")
+tsplot(snbr,"SNBR")
+tsplot(tup,"TUP")
+tsplot(sp500,"S&P 500")
 ```
 
 ## (B) Plot the stldecomposition plot of your data, and discuss the results.  
 ```{r}
 # create the time series objects of the closing prices
 # set frequency = 52 (roughly 52 weeks in a year)
-snbr_ts = ts(snbr$Close,
-             start = c(2010, 12, 20),
-             frequency = 52)
-tup_ts = ts(tup$Close,
-            start = c(2010, 12, 20),
-            frequency = 52)
-sp500_ts = ts(sp500$Close,
-              start = c(2010, 12, 20),
-              frequency = 52)
+snbr_ts = ts(snbr$Close, start = c(2010,12,20),frequency = 52)
+tup_ts = ts(tup$Close, start = c(2010,12,20),frequency = 52)
+sp500_ts = ts(sp500$Close, start = c(2010,12,20),frequency = 52)
 
-autoplot(stl(snbr_ts, s.window = "periodic", robust = TRUE),
-         main = "SNBR: STL Decomposition")
-autoplot(stl(tup_ts, s.window = "periodic", robust = TRUE),
-         main = "TUP STL Decomposition")
-autoplot(stl(sp500_ts, s.window = "periodic", robust = TRUE),
-         main = "S&P 500 STL Decomposition")
+autoplot(stl(snbr_ts,s.window = "periodic",robust=TRUE),
+     main = "SNBR: STL Decomposition")
+autoplot(stl(tup_ts,s.window = "periodic",robust=TRUE),
+     main = "TUP STL Decomposition")
+autoplot(stl(sp500_ts,s.window = "periodic",robust=TRUE),
+     main = "S&P 500 STL Decomposition")
 ```
+
 
 Each decomposition shows that the the time series have significant trend, seasonality, and cycle components. Morever, it shows that each series is not covariance stationary, which we will need to consider when producing models.
 
@@ -171,252 +139,181 @@ S&P 500's price trend is quite linear and upward sloping. The seasonality of the
 
 ## (C) & (E): Fit a model that includes, trend, seasonality, and cyclical components. Then plot the ACF and PACF of the respective residuals and interpret the plots.
 
-To capture the complex dynamics of the series, we will be fitting an ARIMA model to each of them.
+To capture the complex dynamics of the series, we will be fitting a model with trend, seasonal dummies, and a cycle.
 
 ### SNBR Price  
-
 ```{r SNBR modelling}
-m1 <- auto.arima(snbr_ts)
+ggtsdisplay(snbr_ts,
+            main = "SNBR Price",
+            ylab = "Price ($)")
+ggtsdisplay(diff(snbr_ts),
+            main = "SNBR Price",
+            ylab = "Price ($)")
+m1 = arima(snbr_ts,order = c(2,1,2),
+           seasonal=list(order=c(1,0,1)),
+           method = "CSS")
 summary(m1)
 ```
+The original series is non-stationary, so we examine the differenced data to produce our model. 
 
-The model for the price of SNBR is ARIMA (2,1,0) + weekly Seasonal-ARIMA(0,0,1). The I = 1 affirms that the data is not covariance stationary, which is important when modelling with short-term memory processes such as AR and MA processes. 
+It's quite difficult to tell what process to fit to the differenced data. However, we observe the presence of seasonality and that the strongest low-order spikes in the ACF and PACF graphs stop at the 2nd to 3rd lags. As a result, we propose a ARIMA(2,1,2) + S-ARIMA(1,0,1) process to model the data. 
 
-The seasonality of the data is captured by the seasonal component of the model. Specifically, it is taken care of by an S-MA(1). The trend of the series is taken care of by the first differencing I(1), and the cycles of the data are modelled by an AR(2) process.
+The trend of the data is taken care of by the I(1) differencing.
+
+Now we look at the ACF and PACF plots of the residuals to see if our model performs well.
 
 ```{r}
-ggtsdisplay(resid(m1))
+ggtsdisplay(resid(m1),
+            main = "SNBR Model Residuals",
+            ylab = "$")
 ```
 
-The plot of the residuals appears to retain some structure which can be modeled. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the ARIMA(2,1,0) + S-ARIMA(0,0,1) model fits the data quite well.
+The plot of the residuals appears to retain some structure which can be modelled. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the ARIMA(2,1,2) + S-ARIMA(1,0,1) model fits the data quite well.
 
 ### TUP Price  
 
 ```{r TUP modelling}
-m2 <- Arima(
-  tup_ts,
-  order = c(2, 1, 0),
-  include.drift = TRUE,
-  seasonal = list(order = c(1, 0, 0))
-)
-# m2 <- auto.arima(tup_ts)
+ggtsdisplay(tup_ts,
+            main = "TUP Price",
+            ylab = "Price ($)")
+ggtsdisplay(diff(tup_ts),
+            main = "TUP Price",
+            ylab = "Price ($)")
+
+m2 <- arima(tup_ts,order = c(2,1,2))
 summary(m2)
 ```
 
-The model for the price of TUP is ARIMA (1,1,2) + weekly Seasonal-ARIMA(1,0,0). The I = 1 affirms that the data is not covariance stationary, which is important when modelling with short-term memory processes such as AR and MA processes. 
+The original series is non-stationary, so we examine the differenced data to produce our model. 
 
-The seasonality of the data is captured by the seasonal component of the model. Specifically, it is taken care of by an S-AR(1) process. The trend of the series is taken care of by the first differencing I(1), and the cycles of the data are modeled by an ARMA(1,2) process.
+It's quite difficult to tell what process to fit to the differenced data because it looks like white noise. However, we observe that the strongest low-order spikes in the ACF and PACF plots occur at the 2nd lags. As a result, we choose to model the data with an ARIMA(2,1,2) process. 
+
+There is no observable seasonality. Meanwhile, the trend of the data is taken care of by the I(1) differencing.
+
+Now we look at the ACF and PACF plots of the residuals to see if our model performs well.
 
 ```{r}
-ggtsdisplay(resid(m2))
+ggtsdisplay(resid(m2),
+            main = "TUP Model Residuals",
+            ylab = "$")
 ```
 
-The plot of the residuals appears to have no structure. This intuition is affirmed by the ACF and PACF plots which do not have significant spikes. Thus, the ARIMA (1,1,2) + S-ARIMA(1,0,0) model fits the data very well.
-
+The plot of the residuals appears to have no structure. This intuition is affirmed by the ACF and PACF plots which do not have significant spikes. Thus, the ARIMA(2,1,2) model fits the data quite well.
 
 ### S&P 500 Price  
 
 ```{r}
-m3 <- auto.arima(sp500_ts)
+ggtsdisplay(sp500_ts,
+            main = "TUP Price",
+            ylab = "Price ($)")
+ggtsdisplay(diff(sp500_ts),
+            main = "TUP Price",
+            ylab = "Price ($)")
+
+m3 <- arima(sp500_ts,order = c(5,1,4))
 summary(m3)
 ```
 
-The model for the price of the S&P 500 is ARIMA(0,1,1) + drift. The drift suggests that there is a non-intercept for our model's fit. The I = 1 affirms that the data is not covariance stationary, which is important when modelling with short-term memory processes such as AR and MA processes. 
+The original series is non-stationary, so we examine the differenced data to produce our model. 
 
-There is no seasonal component in this model, suggesting that the seasonality is correctly captured by the ARIMA(0,1,1) model.  The trend of the series is taken care of by the first differencing I(1), and the cycles of the data are modeled by an MA(1) process.
+It's quite difficult to tell what process to fit to the differenced data because it looks like white noise. However, we observe that the strongest low-order spikes in the ACF and PACF plots occur at the 4th and 5th lags respectively. As a result, we choose to model the data with an ARIMA(5,1,4) process. 
+
+There is no observable seasonality in the differenced data. Meanwhile, the trend of the data is taken care of by the I(1) differencing.
+
+Now we look at the ACF and PACF plots of the residuals to see if our model performs well.
 
 ```{r}
-ggtsdisplay(resid(m3))
+ggtsdisplay(resid(m3),
+            main = "S&P 500 Model Residuals",
+            ylab = "$")
 ```
 
-The plot of the residuals appears to retain some structure which can be modelled. The residuals are also heteroskedastic. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the ARIMA(0,1,1) + drift model fits the data quite well.
+The plot of the residuals appears to retain some structure which can be modelled. The residuals are also heteroskedastic. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the ARIMA(5,1,4) model fits the data quite well.
 
-## (F) Plot the respective residuals vs. fitted values and discuss your observations.
+## (D) Plot the respective residuals vs. fitted values and discuss your observations.
 
 ### SNBR Model Residuals vs Fit
-```{r message=FALSE, warning=FALSE}
-plot_resid_fit <- function(x, y) {
+```{r}
+library(ggplot2)
+plot_resid_fit <- function(x,y,title) {
   data = data.frame(x = x, y = y)
-  
+
   p <- ggplot(data, aes(x =  x, y = y)) +
-    geom_smooth(
-      method = "lm",
-      se = T,
-      col = "red",
-      formula = y ~ x,
-      show.legend = T
-    ) +
-    geom_point(alpha = 0.5,
-               size = 2,
+    geom_smooth(method = "lm", se=T,
+                col = "red",
+                formula = y ~ x,
+                show.legend = T) + 
+    geom_point(alpha = 0.5,size = 2,
                col = "black") +
     xlab("Fit") + ylab("Residuals") +
-    ggtitle("Residuals vs Fit")
-  
+    ggtitle(glue("{title} Residuals vs Fit"))
+    
   return(p)
 }
 
-plot_resid_fit(fitted(m1), resid(m1))
+plot_resid_fit(fitted(m1),resid(m1),"SNBR")
 ```
 
 There is not much of a linear relationship between the fit and the residuals, suggesting affirming that our model's fit did pretty well.
 
 ### TUP Model Residuals vs Fit  
 ```{r}
-plot_resid_fit(fitted(m2),resid(m2))
+plot_resid_fit(fitted(m2),resid(m2),"TUP")
 ```
 
 There is basically no linear relationship between the residuals and the fitted data. Therefore, our model for TUP prices did exceptionally well.
 
 ### S&P 500 Model Residuals vs Fit  
 ```{r}
-plot_resid_fit(fitted(m3),resid(m3))
+plot_resid_fit(fitted(m3),resid(m3),"S&P 500")
 ```
 
 There is also, no linear relationship between the residuals and the fit of the model fitted to the S&P 500 price series. Therefore, our ARIMA model for this data did very well in fitting the series
 
-## (G) Plot the respective CUSUM and interpret the plot.  
-
-The cumulative sum or CUSUM plots are used for parameter stability. We wish to see a constant variance as we include more observations. This is a recursive CUSUM test since we are using the recursive residuals to test generalized fluctuations.
-
+## (F) Plot the respective CUSUM and interpret the plot.  
 ```{r}
-plot(efp(resid(m1) ~ 1, type = "Rec-CUSUM"))
+
 ```
 
-The fluctuation process is near 0 the entire time and far within the confidence bands. Thus we can conclude there are no structural changes in our model.
-
+## (G) For your model, discuss the associated diagnostic statistics.  
 ```{r}
-plot(efp(resid(m2) ~ 1, type = "Rec-CUSUM"))
+
 ```
 
-The fluctuation process slowly drifts downward as the series progresses but still is wihin the confidence bands. Thus we can conclude there are no structural changes in our model.
-
-
+## (H) Use your model to forecast 12-steps ahead. Your forecast should include the respective error bands.  
 ```{r}
-plot(efp(resid(m3) ~ 1, type = "Rec-CUSUM"))
+
 ```
 
-The fluctuation process is near 0 the entire time and though it drifts pretty far upwards in 2020, it is still far within the confidence bands. Thus we can conclude there are no structural changes in our model.
-
-## (H) For your model, discuss the associated diagnostic statistics.  
-
+## (I) Compare your forecast from (i) to the 12-steps ahead forecasts from ARIMA, Holt-Winters, and ETS models. Which model performs best in terms of MAPE?  
 ```{r}
-summary(m1) # LOOK AT SUMMARY first then residuals
-Box.test(m1$residuals, type = "Ljung-Box")
+
 ```
 
-
-In general, all three of our models performed very well interms of our diagnostic statistics. Though the series for the residuals for SNBR and S&P 500 exhibited some degrees of heteroskedasticity, we can see on the ACF and PACF plots that this structure may not be very significant. A visual inspection of the series for the residuals for TUP show a very standard white noise process confirmed by a lack of structure in both the ACF and PACF plots.
-
-As for the residuals vs fit plot, we notice a lack of a linear relationship for all three models. The residuals appear to be normally distributed around 0 and lack any clear discernible pattern meaning that our model accurately fitted our data.
-
-According to the CUSUM test, we see a near constant variance with all three models. Since none of the models broke through any of the confidence bands, we can conclude there are no structural changes in our models.
-
-
-
-## (I) Use your model to forecast 12-steps ahead. Your forecast should include the respective error bands.  
-
+## (J) Combine the four forecasts and comment on the MAPE from this forecasts vs., the individual ones.  
 ```{r}
-autoplot(forecast(m1, h = 12))
+
 ```
 
-```{r}
-autoplot(forecast(m2, h = 12))
-```
-
-```{r}
-autoplot(forecast(m3, h = 12))
-```
-
-## (J) Compare your forecast from (i) to the 12-steps ahead forecasts from ARIMA, Holt-Winters, and ETS models. Which model performs best in terms of MAPE?  
-
-```{r message=FALSE, warning=FALSE}
-hw1 <- HoltWinters(snbr_ts)
-ets1 <- ets(snbr_ts)
-
-ari_f1 <- forecast(m1, h = 12)
-hw_f1 <- forecast(hw1, h = 12)
-ets_f1 <- forecast(ets1, h = 12)
-
-plot(ari_f1)
-plot(hw_f1)
-plot(ets_f1)
-
-summary(ari_f1)
-summary(hw_f1)
-summary(ets_f1)
-
-# USE ACCURACY
-```
-
-
-```{r}
-hw2 <- HoltWinters(tup_ts)
-ets2 <- ets(tup_ts)
-
-ari_f2 <- forecast(m2, h = 12)
-hw_f2 <- forecast(hw2, h = 12)
-ets_f2 <- forecast(ets2, h = 12)
-
-plot(ari_f2)
-plot(hw_f2)
-plot(ets_f2)
-
-summary(ari_f2)
-summary(hw_f2)
-summary(ets_f2)
-```
-
-
-
-```{r}
-hw3 <- HoltWinters(sp500_ts)
-ets3 <- ets(sp500_ts)
-
-ari_f3 <- forecast(m3, h = 12)
-hw_f3 <- forecast(hw3, h = 12)
-ets_f3 <- forecast(ets3, h = 12)
-
-plot(ari_f3)
-plot(hw_f3)
-plot(ets_f3)
-
-summary(ari_f3)
-summary(hw_f3)
-summary(ets_f3)
-```
-
-
-## (K) Combine the four forecasts and comment on the MAPE from this forecasts vs., the individual ones.  
+## (K) Fit an appropriate VAR model using your two variables. Make sure to show the relevant plots and discuss your results from the fit.  
 ```{r}
 
 ```
 
 
-
-
-
-PHAM STOPS HERE
-
-
-## (L) Fit an appropriate VAR model using your two variables. Make sure to show the relevant plots and discuss your results from the fit.  
+## (L) Compute, plot, and interpret the respective impulse response functions.  
 ```{r}
 
 ```
 
 
-## (M) Compute, plot, and interpret the respective impulse response functions.  
+## (M) Perform a Granger-Causality test on your variables and discuss your results from the test.  
 ```{r}
 
 ```
 
 
-## (N) Perform a Granger-Causality test on your variables and discuss your results from the test.  
-```{r}
-
-```
-
-
-## (O) Use your VAR model to forecast 12-steps ahead. Your forecast should include the respective error bands. Comment on the differences between the VAR forecast and the other ones obtained using the different methods.  
+## (N) Use your VAR model to forecast 12-steps ahead. Your forecast should include the respective error bands. Comment on the differences between the VAR forecast and the other ones obtained using the different methods.  
 ```{r}
 
 ```
