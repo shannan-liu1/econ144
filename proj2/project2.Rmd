@@ -33,6 +33,7 @@ library(strucchange)
 library(tis)
 library(zoo)
 library(gridExtra)
+library(ggplot2)
 ```
 
 \newpage
@@ -149,10 +150,9 @@ ggtsdisplay(snbr_ts,
 ggtsdisplay(diff(snbr_ts),
             main = "SNBR Price",
             ylab = "Price ($)")
-m1 = arima(snbr_ts,order = c(2,1,2),
+m1 = Arima(snbr_ts,order = c(2,1,2),
            seasonal=list(order=c(1,0,1)),
            method = "CSS")
-summary(m1)
 ```
 The original series is non-stationary, so we examine the differenced data to produce our model. 
 
@@ -180,8 +180,7 @@ ggtsdisplay(diff(tup_ts),
             main = "TUP Price",
             ylab = "Price ($)")
 
-m2 <- arima(tup_ts,order = c(2,1,2))
-summary(m2)
+m2 <- Arima(tup_ts,order = c(2,1,2))
 ```
 
 The original series is non-stationary, so we examine the differenced data to produce our model. 
@@ -210,8 +209,7 @@ ggtsdisplay(diff(sp500_ts),
             main = "TUP Price",
             ylab = "Price ($)")
 
-m3 <- arima(sp500_ts,order = c(5,1,4))
-summary(m3)
+m3 <- Arima(sp500_ts,order = c(5,1,4))
 ```
 
 The original series is non-stationary, so we examine the differenced data to produce our model. 
@@ -271,29 +269,201 @@ plot_resid_fit(fitted(m3),resid(m3),"S&P 500")
 There is also, no linear relationship between the residuals and the fit of the model fitted to the S&P 500 price series. Therefore, our ARIMA model for this data did very well in fitting the series
 
 ## (F) Plot the respective CUSUM and interpret the plot.  
-```{r}
 
+Using the CUSUM test or Cumulative Sum we can test for parameter stability. We hope to ensure that the variance is constant as we add more observations using recursive residuals.
+
+```{r}
+plot(efp(m1$res ~ 1, type = "Rec-CUSUM"))
 ```
+
+According to our recursive CUSUM test, the fluctuation process remains well within the confidence bands meaning that there is no structural break in our first model.
+
+```{r}
+plot(efp(m2$res ~ 1, type = "Rec-CUSUM"))
+```
+
+According to our recursive CUSUM test, the fluctuation process trends downwards though is still within the confidence bands meaning that there is no structural break in our second model.
+
+```{r}
+plot(efp(m3$res ~ 1, type = "Rec-CUSUM"))
+```
+
+According to our recursive CUSUM test, the fluctuation process remains well within the confidence bands meaning that there is no structural break in our third model.
+
 
 ## (G) For your model, discuss the associated diagnostic statistics.  
-```{r}
 
+In general, when we look at the ACF/PACF plots for our model's residuals, we see a lack of structure for TUP. For S&P 500, we see a little bit of structure however the magnitude suggests it may be insignificant. We see a little bit more structure for SNBR even at lower orders suggesting we could fit a better model to our series.
+
+In general, the respective residuals vs. fitted values plot lacks any discernible pattern which is good and there is no linear relationship between our residuals and the fit of our model.
+
+Similarly, the recursive CUSUM test shows that all three of our models are structurally sound, meaning there are no breaks in our model specification. 
+
+```{r}
+summary(m1)
 ```
+When looking at our model for SNBR, we can see that only the $ar2$ predictor is significant at the $95\%$ confidence level. The lack of more signficant predictors demonstrates we may have unncessary terms in our model.
+
+```{r}
+summary(m2)
+```
+When looking at our model for TUP, we can see that none of the predictors are significant at the $95\%$ confidence level. The lack of more signficant predictors demonstrates we may have unncessary terms in our model.
+
+```{r}
+summary(m3)
+```
+When looking at our model for S&P 500, we can see that only the $ar2$, $ar4$, $ma2$, $ma4$ predictors are significant at the $95\%$ confidence level. The lack of more signficant predictors demonstrates we may have unncessary terms in our model.
 
 ## (H) Use your model to forecast 12-steps ahead. Your forecast should include the respective error bands.  
-```{r}
 
+```{r}
+autoplot(snbr_ts) + 
+  autolayer(forecast(m1, h = 12)) +
+  xlab("Year") + ylab("$ Dollars") +
+  ggtitle("Forecast for SNBR")
+```
+
+```{r}
+autoplot(tup_ts) + 
+  autolayer(forecast(m2, h = 12)) +
+  xlab("Year") + ylab("$ Dollars") +
+  ggtitle("Forecast for TUP")
+```
+
+```{r}
+autoplot(sp500_ts) + 
+  autolayer(forecast(m3, h = 12)) +
+  xlab("Year") + ylab("$ Dollars") +
+  ggtitle("Forecast for TUP")
 ```
 
 ## (I) Compare your forecast from (i) to the 12-steps ahead forecasts from ARIMA, Holt-Winters, and ETS models. Which model performs best in terms of MAPE?  
-```{r}
 
+```{r message=FALSE, warning=FALSE}
+snbr_train <- window(snbr_ts, end = c(2021, 9))
+m1 <- Arima(snbr_train, order = c(2, 1, 2), seasonal = list(order = c(1, 0, 1)), method = "CSS")
+arima1 <- auto.arima(snbr_train)
+hw1 <- HoltWinters(snbr_train)
+ets1 <- ets(snbr_train)
+
+m_f1 <- forecast(m1, h = 12)
+arima_f1 <- forecast(arima1, h = 12)
+hw_f1 <- forecast(hw1, h = 12)
+ets_f1 <- forecast(ets1, h = 12)
+
+autoplot(snbr_ts) +
+  autolayer(m_f1, series="ARIMA", PI=FALSE) +
+  autolayer(arima_f1, series="AUTO.ARIMA", PI=FALSE) +
+  autolayer(hw_f1, series="HW", PI=FALSE) +
+  autolayer(ets_f1, series="ETS", PI=FALSE) +
+  xlab("Year") + ylab("$ Dollars") +
+  ggtitle("Forecasts for SNBR")
+
+c(ARIMA = accuracy(m_f1, snbr_ts)["Test set","MAPE"],
+  AUTO.ARIMA = accuracy(arima_f1, snbr_ts)["Test set","MAPE"],
+  HW = accuracy(hw_f1, snbr_ts)["Test set","MAPE"],
+  EST = accuracy(ets_f1, snbr_ts)["Test set","MAPE"])
 ```
+
+In terms of MAPE, AUTO.ARIMA performs best for SNBR. 
+
+```{r message=FALSE, warning=FALSE}
+tup_train <- window(tup_ts, end = c(2021, 9))
+m2 <-  Arima(tup_train, order = c(2, 1, 2))
+arima2 <- auto.arima(tup_train)
+hw2 <- HoltWinters(tup_train)
+ets2 <- ets(tup_train)
+
+m_f2 <- forecast(m2, h = 12)
+arima_f2 <- forecast(arima2, h = 12)
+hw_f2 <- forecast(hw2, h = 12)
+ets_f2 <- forecast(ets2, h = 12)
+
+autoplot(tup_ts) +
+  autolayer(m_f2, series="ARIMA", PI=FALSE) +
+  autolayer(arima_f2, series="AUTO.ARIMA", PI=FALSE) +
+  autolayer(hw_f2, series="HW", PI=FALSE) +
+  autolayer(ets_f2, series="ETS", PI=FALSE) +
+  xlab("Year") + ylab("$ Dollars") +
+  ggtitle("Forecasts for TUP")
+
+c(ARIMA = accuracy(m_f2, tup_ts)["Test set","MAPE"],
+  AUTO.ARIMA = accuracy(arima_f2, tup_ts)["Test set","MAPE"],
+  HW = accuracy(hw_f2, tup_ts)["Test set","MAPE"],
+  EST = accuracy(ets_f2, tup_ts)["Test set","MAPE"])
+```
+
+In terms of MAPE, AUTO.ARIMA performs best for TUP.
+
+```{r message=FALSE, warning=FALSE}
+sp500_train <- window(sp500_ts, end = c(2021, 9))
+m3 <-  Arima(sp500_train, order = c(5, 1, 4))
+arima3 <- auto.arima(sp500_train)
+hw3 <- HoltWinters(sp500_train)
+ets3 <- ets(sp500_train)
+
+m_f3 <- forecast(m3, h = 12)
+arima_f3 <- forecast(arima3, h = 12)
+hw_f3 <- forecast(hw3, h = 12)
+ets_f3 <- forecast(ets3, h = 12)
+
+autoplot(sp500_ts) +
+  autolayer(m_f3, series="ARIMA", PI=FALSE) +
+  autolayer(arima_f3, series="AUTO.ARIMA", PI=FALSE) +
+  autolayer(hw_f3, series="HW", PI=FALSE) +
+  autolayer(ets_f3, series="ETS", PI=FALSE) +
+  xlab("Year") + ylab("$ Dollars") +
+  ggtitle("Forecasts for S&P500")
+
+c(ARIMA = accuracy(m_f3, sp500_ts)["Test set","MAPE"],
+  AUTO.ARIMA = accuracy(arima_f3, sp500_ts)["Test set","MAPE"],
+  HW = accuracy(hw_f3, sp500_ts)["Test set","MAPE"],
+  EST = accuracy(ets_f3, sp500_ts)["Test set","MAPE"])
+```
+
+In terms of MAPE, our original ARIMA performs best for SP500.
 
 ## (J) Combine the four forecasts and comment on the MAPE from this forecasts vs., the individual ones.  
-```{r}
 
+```{r}
+combo1 <- (m_f1[["mean"]] + arima_f1[["mean"]] + 
+  hw_f1[["mean"]] + ets_f1[["mean"]])/4
+
+c(ARIMA = accuracy(m_f1, snbr_ts)["Test set","MAPE"],
+  AUTO.ARIMA = accuracy(arima_f1, snbr_ts)["Test set","MAPE"],
+  HW = accuracy(hw_f1, snbr_ts)["Test set","MAPE"],
+  EST = accuracy(ets_f1, snbr_ts)["Test set","MAPE"],
+  COMBINE = accuracy(combo1, snbr_ts)["Test set","MAPE"])
 ```
+
+The combination performs relatively well in terms of the other models however AUTO.ARIMA still outperforms the rest in terms of MAPE.
+
+```{r}
+combo2 <- (m_f2[["mean"]] + arima_f2[["mean"]] + 
+  hw_f2[["mean"]] + ets_f2[["mean"]])/4
+
+c(ARIMA = accuracy(m_f2, tup_ts)["Test set","MAPE"],
+  AUTO.ARIMA = accuracy(arima_f2, tup_ts)["Test set","MAPE"],
+  HW = accuracy(hw_f2, tup_ts)["Test set","MAPE"],
+  EST = accuracy(ets_f2, tup_ts)["Test set","MAPE"],
+  COMBINE = accuracy(combo2, tup_ts)["Test set","MAPE"])
+```
+
+The combination performs relatively well in terms of the other models however AUTO.ARIMA still outperforms the rest in terms of MAPE.
+
+```{r}
+combo3 <- (m_f3[["mean"]] + arima_f3[["mean"]] + 
+  hw_f3[["mean"]] + ets_f3[["mean"]])/4
+
+c(ARIMA = accuracy(m_f3, sp500_ts)["Test set","MAPE"],
+  AUTO.ARIMA = accuracy(arima_f3, sp500_ts)["Test set","MAPE"],
+  HW = accuracy(hw_f3, sp500_ts)["Test set","MAPE"],
+  EST = accuracy(ets_f3, sp500_ts)["Test set","MAPE"],
+  COMBINE = accuracy(combo3, sp500_ts)["Test set","MAPE"])
+```
+
+The combination performs relatively well in terms of the other models however our original ARIMA still outperforms the rest in terms of MAPE.
+
 
 ## (K) Fit an appropriate VAR model using your two variables. Make sure to show the relevant plots and discuss your results from the fit.  
 ```{r}
