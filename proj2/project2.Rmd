@@ -34,6 +34,7 @@ library(tis)
 library(zoo)
 library(gridExtra)
 library(ggplot2)
+library(vars)
 ```
 
 \newpage
@@ -48,7 +49,7 @@ Sleep Number Corporation (SNBR) is a retail and wholesale company headquartered 
 
 Tupperware Brands Corporation (TUP) is consumer discretionary products company headquartered in Florida. They own a portfolio of global direct selling companies which sell products across multiple brands and categories through an independent sales force. The Company's product brands and categories include food preparation, storage, and serving solutions for the kitchen and home. Tupperware Brands also sells beauty and personal care products.
 
-The S&P 500 Index is a capitalization-weighted index of 505 companies in the US with the highest market capitalization. It is widely regarded as the best gauge of large-cap US equities and serves as a benchmark for many investors. It also includes a wide variety of companies from different industries and sectors, and it captures 80% of total market capitalisation in the US.
+The S&P 500 Index is a capitalization-weighted index of 505 companies in the US with the highest market capitalization. It is widely regarded as the best gauge of large-cap US equities and serves as a benchmark for many investors. It also includes a wide variety of companies from different industries and sectors, and it captures 80% of total market capitalization in the US.
 
 SNBR and TUP are related to each other because they are both based in the US and sell durable consumer goods (although Tupperware Brands also sells non-durable goods). Therefore, it may be interesting to map our their relationship through the VAR models. These companies are also affected by broader US market movements. Hence, we include the S&P 500 to track that relationship.
 
@@ -130,7 +131,7 @@ autoplot(stl(sp500_ts,s.window = "periodic",robust=TRUE),
 ```
 
 
-Each decomposition shows that the the time series have significant trend, seasonality, and cycle components. Morever, it shows that each series is not covariance stationary, which we will need to consider when producing models.
+Each decomposition shows that the the time series have significant trend, seasonality, and cycle components. Moreover, it shows that each series is not covariance stationary, which we will need to consider when producing models.
 
 SNBR's price trend is mostly upward with some drift at the end of the observed time period. The seasonality of the data looks quite consistent over time, and there are significant cycles in the data, particularly in the last 4 years of the time series.
 
@@ -168,7 +169,7 @@ ggtsdisplay(resid(m1),
             ylab = "$")
 ```
 
-The plot of the residuals appears to retain some structure which can be modelled. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the ARIMA(2,1,2) + S-ARIMA(1,0,1) model fits the data quite well.
+The plot of the residuals appears to retain some structure which can be modeled. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the ARIMA(2,1,2) + S-ARIMA(1,0,1) model fits the data quite well.
 
 ### TUP Price  
 
@@ -226,9 +227,9 @@ ggtsdisplay(resid(m3),
             ylab = "$")
 ```
 
-The plot of the residuals appears to retain some structure which can be modelled. The residuals are also heteroskedastic. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the ARIMA(5,1,4) model fits the data quite well.
+The plot of the residuals appears to retain some structure which can be modeled. The residuals are also heteroskedastic. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the ARIMA(5,1,4) model fits the data quite well.
 
-## (D) Plot the respective residuals vs. fitted values and discuss your observations.
+## (E) Plot the respective residuals vs. fitted values and discuss your observations.
 
 ### SNBR Model Residuals vs Fit
 ```{r}
@@ -266,9 +267,9 @@ There is basically no linear relationship between the residuals and the fitted d
 plot_resid_fit(fitted(m3),resid(m3),"S&P 500")
 ```
 
-There is also, no linear relationship between the residuals and the fit of the model fitted to the S&P 500 price series. Therefore, our ARIMA model for this data did very well in fitting the series
+There is also no linear relationship between the residuals and the fit of the model fitted to the S&P 500 price series. Therefore, our ARIMA model for this data did very well in fitting the series
 
-## (F) Plot the respective CUSUM and interpret the plot.  
+## (G) Plot the respective CUSUM and interpret the plot.  
 
 Using the CUSUM test or Cumulative Sum we can test for parameter stability. We hope to ensure that the variance is constant as we add more observations using recursive residuals.
 
@@ -291,7 +292,7 @@ plot(efp(m3$res ~ 1, type = "Rec-CUSUM"))
 According to our recursive CUSUM test, the fluctuation process remains well within the confidence bands meaning that there is no structural break in our third model.
 
 
-## (G) For your model, discuss the associated diagnostic statistics.  
+## (H) For your model, discuss the associated diagnostic statistics.  
 
 In general, when we look at the ACF/PACF plots for our model's residuals, we see a lack of structure for TUP. For S&P 500, we see a little bit of structure however the magnitude suggests it may be insignificant. We see a little bit more structure for SNBR even at lower orders suggesting we could fit a better model to our series.
 
@@ -302,19 +303,19 @@ Similarly, the recursive CUSUM test shows that all three of our models are struc
 ```{r}
 summary(m1)
 ```
-When looking at our model for SNBR, we can see that only the $ar2$ predictor is significant at the $95\%$ confidence level. The lack of more signficant predictors demonstrates we may have unncessary terms in our model.
+When looking at our model for SNBR, we can see that only the $ar2$ predictor is significant at the $95\%$ confidence level. The lack of more significant predictors demonstrates we may have unnecessary terms in our model.
 
 ```{r}
 summary(m2)
 ```
-When looking at our model for TUP, we can see that none of the predictors are significant at the $95\%$ confidence level. The lack of more signficant predictors demonstrates we may have unncessary terms in our model.
+When looking at our model for TUP, we can see that none of the predictors are significant at the $95\%$ confidence level. The lack of more significant predictors demonstrates we may have unnecessary terms in our model.
 
 ```{r}
 summary(m3)
 ```
-When looking at our model for S&P 500, we can see that only the $ar2$, $ar4$, $ma2$, $ma4$ predictors are significant at the $95\%$ confidence level. The lack of more signficant predictors demonstrates we may have unncessary terms in our model.
+When looking at our model for S&P 500, we can see that only the $ar2$, $ar4$, $ma2$, $ma4$ predictors are significant at the $95\%$ confidence level. The lack of more significant predictors demonstrates we may have unnecessary terms in our model.
 
-## (H) Use your model to forecast 12-steps ahead. Your forecast should include the respective error bands.  
+## (i) Use your model to forecast 12-steps ahead. Your forecast should include the respective error bands.  
 
 ```{r}
 autoplot(snbr_ts) + 
@@ -337,7 +338,7 @@ autoplot(sp500_ts) +
   ggtitle("Forecast for TUP")
 ```
 
-## (I) Compare your forecast from (i) to the 12-steps ahead forecasts from ARIMA, Holt-Winters, and ETS models. Which model performs best in terms of MAPE?  
+## (j) Compare your forecast from (i) to the 12-steps ahead forecasts from ARIMA, Holt-Winters, and ETS models. Which model performs best in terms of MAPE?  
 
 ```{r message=FALSE, warning=FALSE}
 snbr_train <- window(snbr_ts, end = c(2021, 9))
@@ -423,7 +424,7 @@ c(ARIMA = accuracy(m_f3, sp500_ts)["Test set","MAPE"],
 
 In terms of MAPE, our original ARIMA performs best for SP500.
 
-## (J) Combine the four forecasts and comment on the MAPE from this forecasts vs., the individual ones.  
+## (k) Combine the four forecasts and comment on the MAPE from this forecasts vs., the individual ones.  
 
 ```{r}
 combo1 <- (m_f1[["mean"]] + arima_f1[["mean"]] + 
@@ -465,27 +466,60 @@ c(ARIMA = accuracy(m_f3, sp500_ts)["Test set","MAPE"],
 The combination performs relatively well in terms of the other models however our original ARIMA still outperforms the rest in terms of MAPE.
 
 
-## (K) Fit an appropriate VAR model using your two variables. Make sure to show the relevant plots and discuss your results from the fit.  
+## (l) Fit an appropriate VAR model using your two variables. Make sure to show the relevant plots and discuss your results from the fit.  
 ```{r}
+ccf(snbr_ts,tup_ts,ylab="Cross-Correlation Function", main = "SNBR and TUP CCF")
+y=cbind(snbr_ts, tup_ts)
+y_tot=data.frame(y)
+VARselect(y_tot, lag.max = 10)
+VARselect(y_tot, lag.max = 5)
+```
 
+When we set the lag max at 5, the VARselect diagnostics agree on a VAR(3) model. But when we set the lag max at 10, the diagnostics do not coincide as much and VARselect results in a VAR(7) model for our two variables. Because of this, we will look at the summary statistics for both a VAR(3) and a VAR(7) model and then choose which to use. 
+
+```{r}
+y_model=VAR(y_tot,p=3)
+y_model2=VAR(y_tot,p=7)
+summary(y_model2)
+summary(y_model)
+```
+
+From comparing the RSE and the Adjusted R-squared, we find the VAR(7) model is a better fit. Now we will look at the ACF and PACF of the residuals from our VAR(7) fit.
+
+```{r}
+plot(y_model2)
+tsdisplay(residuals(y_model2)[,2])
+```
+
+The residuals resemble white noise and the scale of the PACF suggests that there are not significant resulting lags and thus the VAR(7) takes care of all of the dynamics and is a good fit for this series.
+
+## (m) Compute, plot, and interpret the respective impulse response functions.  
+```{r}
+quartz()
+irf(y_model2)
+plot(irf(y_model2, n.ahead=36))
 ```
 
 
-## (L) Compute, plot, and interpret the respective impulse response functions.  
+## (n) Perform a Granger-Causality test on your variables and discuss your results from the test.  
 ```{r}
-
+grangertest(snbr_ts ~ tup_ts, order = 7)
 ```
 
 
-## (M) Perform a Granger-Causality test on your variables and discuss your results from the test.  
-```{r}
 
+```{r}
+grangertest(tup_ts ~ snbr_ts, order = 7)
 ```
 
 
-## (N) Use your VAR model to forecast 12-steps ahead. Your forecast should include the respective error bands. Comment on the differences between the VAR forecast and the other ones obtained using the different methods.  
+## (o) Use your VAR model to forecast 12-steps ahead. Your forecast should include the respective error bands. Comment on the differences between the VAR forecast and the other ones obtained using the different methods.  
 ```{r}
-
+var.predict = predict(object=y_model2, n.ahead=12)
+quartz()
+plot(var.predict)
+plot(fevd(y_model2, n.ahead = 12))
+plot(stability(y_model2, type = "Rec-CUSUM"), plot.type="single")
 ```
 
 
