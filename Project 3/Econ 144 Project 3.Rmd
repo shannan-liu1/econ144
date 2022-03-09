@@ -37,6 +37,8 @@ library(crypto2)
 library(ggplot2)
 library(PerformanceAnalytics)
 library(tibble)
+library(vars)
+library(MLmetrics)
 ```
 
 \newpage
@@ -177,7 +179,7 @@ tsplot(abs(btc_ts),"Absolute value of BTC")
 ```
 
 ## (B) Relationship between BTC's returns and other variables   
-We'll utilise a scatterplot matrix and correlation plot to visualise the relationships between all of the currencies' returns.
+We'll utilise a scatterplot matrix and correlation plot to visualize the relationships between all of the currencies' returns.
 ```{r}
 library(GGally)
 ret_data <- data.frame(btc$returns,eth$returns,
@@ -237,7 +239,7 @@ xrp_data <- data.frame(btc$returns,xrp$volume,
 # scatterplot
 ggcorr(xrp_data)
 ```
-XRP's returns is the only variable that is postrively linearly correlated with BTC's returns.
+XRP's returns is the only variable that is positively linearly correlated with BTC's returns.
 
 From this, we can conclude that XRP's and ETH's returns are potentially appropriate regressors for forecasting BTC's returns, and we can incorporate them into our models.
 
@@ -247,7 +249,7 @@ autoplot(stl(btc_ts,s.window = "periodic",robust=TRUE),
      main = "BTC STL Decomposition")
 ```
 
-The plot shows a trend, but the trend's marnitude is so small that it can be considered insignificant. There may be a seasonal pattern in the data that can be exploited, as it appears that there are regular periods of higher volatility. There also appears to be some structure in the residuals.
+The plot shows a trend, but the trend's magnitude is so small that it can be considered insignificant. There may be a seasonal pattern in the data that can be exploited, as it appears that there are regular periods of higher volatility. There also appears to be some structure in the residuals.
 
 To affirm or reject these observations, we can build several models and test their significance.
 
@@ -264,7 +266,7 @@ summary(arima_btc)
 summary(reg_arima_btc)
 ```
 
-For the pure ARIMA model, we obtain a ARIMA(0,0,0) process with non-zero mean. This suggests that the ARIMA process is not suitable for modelling this data.
+For the pure ARIMA model, we obtain a ARIMA(0,0,0) process with non-zero mean. This suggests that the ARIMA process is not suitable for modeling this data.
 
 In the second model, we fit a regression to the returns data and obtain a ARIMA (0,0,1) to model our errors. Since the data was already covariance stationary, there was no need for differencing it. Thus, I = 0. The lack of an AR(1) process suggests that the errors do not have persistent autocorrelations. There is also no seasonality or trend captured by the model.
 
@@ -279,7 +281,6 @@ ggtsdisplay(resid(arima_btc),
 
 The residuals of the pure ARIMA model do not show very much structure. However, this doesn't mean that the ARIMA is a good model for forecasting the data because it would only predict the mean value of the series at future points in time.
 
-
 ```{r}
 ggtsdisplay(resid(reg_arima_btc),
             main = "Regression + ARIMA Residuals",
@@ -287,7 +288,6 @@ ggtsdisplay(resid(reg_arima_btc),
 ```
 
 The plot of the residuals appears to retain some structure which can be modeled. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the regression + ARIMA model fits the data quite well.
-
 
 ## (F) Plot regression-ARIMA fit and residuals vs. fitted-values
 
@@ -324,21 +324,207 @@ plot_resid_fit(fitted(reg_arima_btc),
                resid(reg_arima_btc),"BTC")
 ```
 
-There is not much of a linear relationship between the fit and the residuals, suggesting affirming that our model's fit did pretty well. This can also be seen on the 
+There is not much of a linear relationship between the fit and the residuals, suggesting that our model's fit did pretty well. We will now look at the recursive residuals to further reaffirm this conclusion. 
 
-## Plot the respective CUSUM and interpret the plot
+## Plot the recursive residuals 
 
-## Forecast 12-steps ahead
+```{r}
+#Plot recursive residuals 
+reg_arima_btc_recresid = recresid(reg_arima_btc$residuals~1)
+plot(reg_arima_btc_recresid, ylab="Regression + Arima Fit",
+     main="Recursive Residuals from Regression + Arima Fit")
+```
+
+The recursive residuals are scattered around 0 and do not show any dynamics, reaffirming that the Regression + Arima Fit is a good model. 
+## Train and Test Regression + Arima Fit to get MAPE
+
+```{r}
+
+```
 
 ## Compare your forecast from (i) to the 12-steps ahead forecasts from Holt-Winters, ETS, NNETAR, VAR, Prophet  
 
-### Holt Winters
+We will now construct a Holt-Winters model and assess whether it outperforms our Regression + arima fit.
 
-### ETS
+### Holt-Winters
 
-### NNETAR
+Due to the high frequency of the data, we will create a Holt-Winters model consisting of a linear regression + additive Holt-Winters for the residuals. 
 
-### VAR -- ETH, XRP & BTC since they r correlated
+```{r}
+#Create linear regression of btc returns on eth returns
+btc_eth_lm <- lm(btc$returns~eth$returns)
+btc_lm_res_ts <- ts(btc_eth_lm$residuals,freq=365,start=c(2016,1))
+reg_hw_btc <- hw(btc_lm_res_ts,seasonal=c("additive"))
+reg_ets_btc <- ets(btc_lm_res_ts)
+```
+
+
+### NNETAR Models
+
+We will fit a NNETAR model to BTC Returns, as well as a NNETAR model consisting of a linear model of BTC Returns regressed on ETH Returns and a NNETAR model of the residuals.
+
+```{r}
+#NNAR model of BTC returns
+nnar_btc <- nnetar(btc_ts)
+
+#Linear model with NNAR model of residuals
+btc_eth_lm <- lm(returns$btc~returns$eth_ts)
+reg_nnar_btc <- nnetar(btc_eth_lm$residuals, 
+                       xreg=cbind(returns$btc_ts,returns$eth_ts))
+
+#Plot both NNAR models 
+autoplot(btc_ts, series="BTC Returns") +
+  autolayer(nnar_btc$fitted, series="NNAR Model Returns") +
+  autolayer(reg_nnar_btc$fitted, series="LM of Returns + NNAR Model of Residuals") +
+  ggtitle("NNAR Model Fits for BTC Returns")
+```
+
+Judging from the plot, the Linear Model + NNETAR Model appears to outperform the simple NNETAR model. We will now look at the residuals from each in order to choose a model. 
+
+##Inspect residuals from both nnetar fits
+
+```{r}
+checkresiduals(nnar_btc, main="Residuals from NNETAR Model of BTC Returns")
+checkresiduals(reg_nnar_btc$residuals, main="Residuals from Linear Model with NNETAR Model of Residuals")
+```
+
+The residuals for both models appear to be white noise and normally distributed, but the magnitude of the lags for the Linear Model + NNETAR model are significantly lower and display less dynamics. Therefore, we will create our forecasts with the Linear Model + NNETAR Model. 
+
+#Inspect Recursive Residuals
+```{r}
+reg_nnar_btc_recresid = recresid(reg_nnar_btc$residuals~1)
+plot(reg_nnar_btc_recresid,ylab="Regression + NNETAR Fit", 
+     main="Recursive Residuals from Regression + NNETAR fit")
+```
+
+The recursive residuals from the Regression + NNETAR model reaffirm that this model is a good fit. Thus, we will continue and forecast with this fit. 
+
+#Train and Test to get MAPE from Regression + NNETAR Model
+
+```{r}
+btc.train <- window(btc_ts, end=c(2021,1))
+eth.train <- window(eth_ts, end=c(2021,1))
+btc.eth.lm.train <- lm(btc.train ~ eth.train)
+reg.nnar.train <- nnetar(btc.eth.lm.train$residuals,
+                         xreg=cbind(btc.train,eth.train))
+reg.nnar.pred <- predict(object=reg.nnar.train$fitted, n.ahead=12) #Need to figure this out
+MAPE(btc.train, reg.nnar.pred$model$fitted.values)
+```
+
+### VAR -- ETH, XRP & BTC since they are correlated
+
+We will now create VAR models to see if we can outperform our Regression + NNETAR Model. We will create two VAR models: one between BTC and ETH, and one between BTC and XRP. First we will start with a BTC and ETH VAR Model.
+
+## BTC and ETH VAR Model 
+
+```{r}
+#Explore cross-correlations
+ccf(btc_ts,eth_ts,ylab="Cross-Correlation Function", main = "BTC and ETH CCF")
+
+#Create combined sample for VAR model 
+y_btc_eth=cbind(btc_ts, eth_ts)
+y_tot_btc_eth=data.frame(y_btc_eth)
+VARselect(y_tot_btc_eth, lag.max = 10)
+```
+
+From VARselect, we will set the oder p=4 for our VAR model. 
+
+# Create VAR model for BTC and ETH
+```{r}
+vmod_btc_eth=VAR(y_btc_eth,p=4) 
+summary(vmod_btc_eth) 
+```
+
+We will now inspect the residuals to measure the fit.
+
+#Inspect Residuals
+```{r}
+vmod_btc_eth$varresult$btc_ts
+tsdisplay(vmod_btc_eth$varresult$btc_ts$fitted.values)
+tsdisplay(vmod_btc_eth$varresult$btc_ts$residuals)
+```
+The residuals appear to be mostly scattered around 0 with very little dynamics. Thus, this VAR model appears to be a good fit so far.
+
+#Plot VAR Model
+```{r}
+vmod_eth_ts = ts(vmod_btc_eth$varresult$btc_ts$fitted.values,
+                 start=c(2016,1),freq=365)
+plot(btc_ts,col="black",lwd=1,lty=1,main="BTC Returns and Fitted Values from BTC,ETH VAR Model")
+lines(vmod_eth_ts,col="red",lty=2)
+legend("bottomleft",legend=c("BTC","VAR"),text.col=1:4,bty = "o")
+```
+While the residuals appeared to resemble white noise, it is apparent that our VAR model using ETH returns does not capture a large portion of the volatility in BTC returns. We will now try to create another VAR model using XRP returns to forecast BTC returns. 
+
+## BTC and XRP VAR Model 
+
+```{r}
+#Explore cross-correlations
+ccf(btc_ts,xrp_ts,ylab="Cross-Correlation Function", main = "BTC and XRP CCF")
+
+#Create combined sample for VAR model 
+y_btc_xrp=cbind(btc_ts,xrp_ts)
+y_tot_btc_xrp=data.frame(y_btc_xrp)
+VARselect(y_btc_xrp, lag.max=10)
+```
+
+From VARselect we will choose order p=2 for our VAR model.
+
+```{r}
+#Create VAR model for BTC and XRP
+vmod_btc_xrp=VAR(y_btc_xrp,p=2)
+summary(vmod_btc_xrp)
+```
+
+#Inspect Residuals
+```{r}
+vmod_btc_xrp$varresult$btc_ts
+tsdisplay(vmod_btc_xrp$varresult$btc_ts$fitted.values)
+tsdisplay(vmod_btc_xrp$varresult$btc_ts$residuals)
+```
+
+These residuals also appear to resemble white noise with very little dynamics that do not appear to be significant. Once again we will move forward with this model since the residuals suggest this VAR model is a good fit. 
+
+#Plot Model 
+```{r}
+vmod_xrp_ts = ts(vmod_btc_xrp$varresult$btc_ts$fitted.values,
+                 start=c(2016,1),freq=365)
+plot(btc_ts,col="black",lwd=1,lty=1,main="BTC Returns and Fitted Values from BTC,XRP VAR Model")
+lines(vmod_xrp_ts,col="red",lty=2)
+legend("bottomleft",legend=c("BTC","VAR"),text.col=1:4,bty = "o")
+```
+
+As with the orevious VAR model, the VAR model using ETH returns do not seem to capture any of the volatility in the BTC returns series. We will now train and test each VAR model (the first one using ETH returns and the second using XRP returns) in order to measure the MAPE to decide which VAR model performs better in predicting BTC returns. We will then compare this chosen model to our previous models to assess if we can outperfrom them.
+
+#Train and test to measure MAPE for both VAR models
+```{r}
+#Train and test ETH VAR Model
+btc.train <- window(btc_ts, end=c(2021,1))
+eth.train <- window(eth_ts, end=c(2021,1))
+y.eth.train=cbind(btc.train,eth.train)
+y_eth_train=data.frame(y.eth.train)
+vmod.eth.train=VAR(y_eth_train,p=4)
+vmod.eth.train.pred=predict(object=vmod.eth.train, n.ahead=12)
+
+#Train and test XRP VAR Model
+xrp.train <- window(xrp_ts, end=c(2021,1))
+y.xrp.train=cbind(btc.train,xrp.train)
+y_xrp_train=data.frame(y.xrp.train)
+vmod.xrp.train=VAR(y_xrp_train,p=2)
+vmod.xrp.train.pred=predict(object=vmod.xrp.train, n.ahead=12)
+
+#Compare MAPEs
+MAPE(vmod.eth.train.pred$model$varresult$btc.train$fitted.values, y_eth_train$btc.train)
+MAPE(vmod.xrp.train.pred$model$varresult$btc.train$fitted.values, y_xrp_train$btc.train)
+```
+
+Our VAR model using ETH returns to predict BTC returns has a significantly lower MAPE, so we will forecast with this model. 
+
+#Forecast 12 steps ahead using ETH VAR Model 
+
+```{r}
+vmod.pred <- predict(object=vmod_btc_eth, n.ahead=12)
+plot(vmod.pred, xlim=c(2000,2500))
+```
 
 ### Prophet Model
 ```{r}
@@ -361,6 +547,14 @@ plot(preds_btc,
 #prophet_plot_components()
 #plot_cross_validation_metric()
 ```
+
+
+###THIEF
+
+###TBATS
+
+###Combined Forecasts
+
 ## Combine the forecasts + discussion on MAPE from this forecasts vs., the individual ones  
 
 ```{r}
@@ -388,4 +582,5 @@ autoplot(cbind(exp(norm_ret),exp(strat_ret)))
 
 # Conclusion
 
+#Make sure to exlpain why we did not use HW / ETS because they were not built for this high of frequency data and crashed our Rstudio so we supplemented with THIEF / MAPAS / TBATS
 
