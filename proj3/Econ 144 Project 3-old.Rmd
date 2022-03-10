@@ -1,0 +1,391 @@
+---
+title: "Econ 144 Project 2"
+author: "Shannan Liu, Austin Pham, Zach Wrubel"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+fontfamily: mathpazo
+output:
+  pdf_document:
+    toc: true
+  fig_caption: yes
+  highlight: haddock
+  number_sections: true
+  df_print: paged
+fontsize: 10.5pt
+editor_options:
+chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+library(tseries)
+library(forecast)
+library(stats)
+library(stats4)
+library(TSA)
+library(timeSeries)
+library(fUnitRoots)
+library(fBasics)
+library(tseries)
+library(timsac)
+library(TTR)
+library(strucchange)
+library(tis)
+library(zoo)
+library(gridExtra)
+library(crypto2)
+library(ggplot2)
+library(PerformanceAnalytics)
+library(tibble)
+```
+
+\newpage
+# I. Introduction  
+
+In this project, we will forecast the returns of Bitcoin with several models including ARIMA, ETS, Holt-Winters, NNETAR, Prophet, and a forecast combination.
+
+To build these forecasts, we'll also be using data from other cryptocurrencies including Ethereum, Tether, and XRP.  
+
+
+## Brief Background on Data:
+Bitcoin (BTC): a digital currency that was released on Jan 3, 2009. It is the most well known cryptocurrency in the world, and it popularised the concept of blockchain technology. While some countries have adopted it as legal tender, others such as China, have banned the currency from their country. Although Bitcoin can be used to purchase goods and services, many view it as an investment vehicle because of its meteoric rise in value. Some investors also believe it could replace gold as a safe-haven investment during periods of high inflation or economic uncertainty.   
+
+Ethereum (ETH): another digital currency. It was released on July 30, 2015. It is the next most popular cryptocurrency. It introduced smart contract functionality, which Bitcoin does not have.   
+
+Tether (USDT): unlike Bitcoin and Ethereum, Tether is a stable coin, meaning its value is pegged to the US dollar at a 1:1 ratio. Thus, its value is more stable than other cryptocurrecies.  
+
+XRP: is another popular cryptocurrency created by Ripple and mainly used for the settlement of cross-border remittances. 
+
+## Source of Data
+All of the data was sourced from https://coinmarketcap.com via their web api. We will be analyzing daily observations of the data from December 20, 2015 to March 3, 2022. Company descriptions were adapted from descriptions provided at https://bloomberg.com.
+
+
+```{r warning=FALSE}
+# import data
+# get list of active coins from 2015
+cl <- crypto_list(only_active=TRUE) %>%
+  dplyr::filter(first_historical_data<="2015-12-31",
+                last_historical_data>="2022-03-03")
+
+cl_final <- rbind(dplyr::filter(cl,cl$slug=="bitcoin"),
+                  dplyr::filter(cl,cl$slug=="ethereum"),
+                  dplyr::filter(cl,cl$slug=="xrp"),
+                  dplyr::filter(cl,cl$slug=="tether"))
+
+coins <- crypto_history(coin_list = cl_final,
+                        start_date = "20151231", interval="daily")
+
+relevant_vars <- c("timestamp","close","volume",
+                   "open","high","low","market_cap")
+
+# create separate dfs for each variable
+btc <- dplyr::filter(coins[relevant_vars],coins$slug=="bitcoin")
+eth <- dplyr::filter(coins[relevant_vars],coins$slug=="ethereum")
+usdt <- dplyr::filter(coins[relevant_vars],coins$slug=="tether")
+xrp <- dplyr::filter(coins[relevant_vars],coins$slug=="xrp")
+
+# convert POSIXct to date time
+btc$timestamp <- as.Date(btc$timestamp)
+eth$timestamp <- as.Date(eth$timestamp)
+usdt$timestamp <- as.Date(usdt$timestamp)
+xrp$timestamp <- as.Date(xrp$timestamp)
+
+# there are no NA values 
+cat("Number of NA values in BTC series:",sum(is.na(btc)),"\n")
+cat("Number of NA values in ETH series:",sum(is.na(eth)),"\n")
+cat("Number of NA values in USDT series:",sum(is.na(usdt)),"\n")
+cat("Number of NA values in XRP series:",sum(is.na(xrp)))
+
+# create returns column 
+btc$returns <- c(NA,diff(log(btc$close)))
+eth$returns <- c(NA,diff(log(eth$close)))
+usdt$returns <- c(NA,diff(log(usdt$close)))
+xrp$returns <- c(NA,diff(log(xrp$close)))
+
+# remove NAs
+btc <- na.omit(btc)
+eth <- na.omit(eth)
+usdt <- na.omit(usdt)
+xrp <- na.omit(xrp)
+
+btc_ts <- ts(btc$returns,
+             # daily freq
+             frequency = 365,
+             start = c(2016,1))
+eth_ts <- ts(eth$returns,
+             # daily freq
+             frequency = 365,
+             start = c(2016,1))
+usdt_ts <- ts(usdt$returns,
+             # daily freq
+             frequency = 365,
+             start = c(2016,1))
+xrp_ts <- ts(xrp$returns,
+             # daily freq
+             frequency = 365,
+             start = c(2016,1))
+```
+
+\newpage
+# II. Results  
+
+## (A) Time Series Plots
+```{r warning=FALSE}
+library(glue)
+tsplot <- function(y,series_name) {
+  #################################
+  # Plot the original time series 
+  # A histogram of the series     
+  # ACF and PACF plots
+  #################################
+  ax1 = autoplot(y, main = sprintf("%s Returns",series_name),
+         ylab = "Percentage (%)",xlab = "Time")
+  `Closing Price` = y
+  ax2 = gghistogram(`Closing Price`)
+  ax3 = ggAcf(y,
+              main = glue('{series_name} Sample Autocorrelations'),
+              xlab="Displacement",lag.max = 48)
+  ax4 = ggPacf(y,
+               main = glue('{series_name} Sample Partial Autocorrelations'),
+               xlab="Displacement",lag.max = 48)
+  grid.arrange(ax1, ax2,ax3,ax4, ncol=2,nrow = 2)
+}
+
+# plot returns together together
+returns <- data.frame(btc_ts,eth_ts,usdt_ts,xrp_ts)
+rownames(returns) <- btc$timestamp
+head(returns)
+chart.TimeSeries(returns, 
+      legend.loc="bottom", 
+      main="Daily Returns of BTC, ETH, USDT,XRP",) 
+
+# plot returns separately:
+# time-series, histogram, ACF and PACF plots 
+tsplot(btc_ts,"BTC")
+tsplot(eth_ts,"ETH")
+tsplot(usdt_ts,"USDT")
+tsplot(xrp_ts,"XRP")
+```
+
+From the first graph of all the returns series, we can see that XRP has had the highest volatility. Meanwhile, USDT has the most stable returns.
+
+In the individual plots, we observe that the returns data for all the cryptocurrencies look stationary and that they have ACFs and PACFs that resemble white noise. Therefore, they may not be useful as regressors. This also indicates that it may be difficult to model BTC's returns over time. However, non-linear relationships between the lags of BTC's returns do exist (as shown below). Thus, it may be worthwhile to attempt to model this data.
+
+```{r warning=FALSE}
+tsplot(btc_ts^2,"BTC^2")
+tsplot(abs(btc_ts),"Absolute value of BTC")
+```
+
+## (B) Relationship between BTC's returns and other variables   
+We'll utilise a scatterplot matrix and correlation plot to visualise the relationships between all of the currencies' returns.
+```{r}
+library(GGally)
+ret_data <- data.frame(btc$returns,eth$returns,
+                       usdt$returns,xrp$returns)
+
+# scatterplot
+ggpairs(ret_data)
+```
+
+The scatterplot matrix shows that BTC, ETH, and XRP have moderately positive correlations with each other, suggesting that they may be useful regressors for modelling BTC's returns.
+
+```{r}
+# how much do BTC's returns correlate with 
+# its own data (e.g. BTC's OLHC)
+self_data <- data.frame(btc$returns,btc$volume,
+                        btc$open,btc$low,btc$high,
+                        btc$close,btc$market_cap)
+
+# scatterplot
+ggcorr(self_data)
+```
+
+There is very little correlation between BTC's returns and other data about it.
+
+```{r}
+# BTC returns and ETH data
+eth_data <- data.frame(btc$returns,eth$volume,
+                       eth$open,eth$low,eth$high,
+                       eth$close,eth$market_cap,
+                       eth$returns)
+
+# scatterplot
+ggcorr(eth_data)
+```
+ETH's returns is the only variable that is positively linearly correlated with BTC's returns.
+
+```{r}
+# BTC returns and USDT data
+usdt_data <- data.frame(btc$returns,usdt$volume,
+                       usdt$open,usdt$low,usdt$high,
+                       usdt$close,usdt$market_cap,
+                       usdt$returns)
+
+# scatterplot
+ggcorr(usdt_data)
+```
+
+There is no correlation between BTC's returns and USDT's data
+
+```{r}
+# BTC returns and ETH data
+xrp_data <- data.frame(btc$returns,xrp$volume,
+                       xrp$open,xrp$low,xrp$high,
+                       xrp$close,xrp$market_cap,
+                       xrp$returns)
+
+# scatterplot
+ggcorr(xrp_data)
+```
+XRP's returns is the only variable that is postrively linearly correlated with BTC's returns.
+
+From this, we can conclude that XRP's and ETH's returns are potentially appropriate regressors for forecasting BTC's returns, and we can incorporate them into our models.
+
+## (C) Can BTC's returns be decomposed?  
+```{r}
+autoplot(stl(btc_ts,s.window = "periodic",robust=TRUE),
+     main = "BTC STL Decomposition")
+```
+
+The plot shows a trend, but the trend's marnitude is so small that it can be considered insignificant. There may be a seasonal pattern in the data that can be exploited, as it appears that there are regular periods of higher volatility. There also appears to be some structure in the residuals.
+
+To affirm or reject these observations, we can build several models and test their significance.
+
+## (D) Fitting ARIMA to BTC's returns  
+We will fit an ARIMA to BTC's returns in two ways. First, we will use an ARIMA to model the data itself. Second, we will fit a regression to the data and fit the ARIMA to the regression model's errors.
+```{r}
+btc_tib <- as_tibble(btc)
+
+arima_btc <- auto.arima(btc_ts)
+reg_arima_btc <- auto.arima(btc_tib[,"returns"],
+                 xreg=cbind(eth$returns,
+                            xrp$returns))
+summary(arima_btc)
+summary(reg_arima_btc)
+```
+
+For the pure ARIMA model, we obtain a ARIMA(0,0,0) process with non-zero mean. This suggests that the ARIMA process is not suitable for modelling this data.
+
+In the second model, we fit a regression to the returns data and obtain a ARIMA (0,0,1) to model our errors. Since the data was already covariance stationary, there was no need for differencing it. Thus, I = 0. The lack of an AR(1) process suggests that the errors do not have persistent autocorrelations. There is also no seasonality or trend captured by the model.
+
+The second model lower AIC, AICc, and BIC. Therefore, it is better than the simpler ARIMA model.
+
+## (E) Plot ACF and PACF of residuals
+```{r}
+ggtsdisplay(resid(arima_btc),
+            main = "Pure ARIMA Model Residuals",
+            ylab = "Percentage")
+```
+
+The residuals of the pure ARIMA model do not show very much structure. However, this doesn't mean that the ARIMA is a good model for forecasting the data because it would only predict the mean value of the series at future points in time.
+
+
+```{r}
+ggtsdisplay(resid(reg_arima_btc),
+            main = "Regression + ARIMA Residuals",
+            ylab = "Percentage")
+```
+
+The plot of the residuals appears to retain some structure which can be modeled. However, the magnitude of the autocorrelation spikes seen on the ACF and PACF plots suggest that this structure may not be very significant. Therefore, the regression + ARIMA model fits the data quite well.
+
+
+## (F) Plot regression-ARIMA fit and residuals vs. fitted-values
+
+```{r}
+# plot of fitting values
+reg_arima_fit <- ts(reg_arima_btc$fitted,frequency = 365,
+               start = c(2016,1))
+
+
+autoplot(cbind(btc_ts,reg_arima_fit),
+         main = "Regression + ARIMA Fit") +
+  labs("Series","Fit")
+```
+
+```{r}
+# plot of residuals vs. fitted values
+library(ggplot2)
+plot_resid_fit <- function(x,y,title) {
+  data = data.frame(x = x, y = y)
+
+  p <- ggplot(data, aes(x =  x, y = y)) +
+    geom_smooth(method = "lm", se=T,
+                col = "red",
+                formula = y ~ x,
+                show.legend = T) + 
+    geom_point(alpha = 0.5,size = 2,
+               col = "black") +
+    xlab("Fit") + ylab("Residuals") +
+    ggtitle(glue("{title} Residuals vs Fit"))
+    
+  return(p)
+}
+plot_resid_fit(fitted(reg_arima_btc),
+               resid(reg_arima_btc),"BTC")
+```
+
+There is not much of a linear relationship between the fit and the residuals, suggesting affirming that our model's fit did pretty well. This can also be seen on the 
+
+## Plot the respective CUSUM and interpret the plot
+
+## Forecast 12-steps ahead
+
+## Compare your forecast from (i) to the 12-steps ahead forecasts from Holt-Winters, ETS, NNETAR, VAR, Prophet  
+
+### Holt Winters
+
+### ETS
+
+### NNETAR
+
+### VAR -- ETH, XRP & BTC since they r correlated
+
+### Prophet Model
+```{r}
+# can add regressors & change points if you want.. up to you
+library(prophet)
+df_r_btc <- data.frame(ds = btc$timestamp,
+                 y = as.numeric(btc$returns))
+
+preds_btc <- prophet(df_r_btc,daily.seasonality=TRUE)
+future_btc <- make_future_dataframe(preds_btc, periods = 60)
+forecast_btc <- predict(preds_btc, future_btc)
+
+plot(preds_btc, 
+     forecast_btc,
+     main="BTC Returns",
+     ylab = "Percentage",
+     xlab = "Time")
+
+#can try using this too if u want to interpret stuff
+#prophet_plot_components()
+#plot_cross_validation_metric()
+```
+## Combine the forecasts + discussion on MAPE from this forecasts vs., the individual ones  
+
+```{r}
+
+```
+
+## Financial performance of models (sample)  & interpretation
+```{r}
+# if hits == -1, then model predicted in wrong direction
+# if hits == 1, then model predicted in correct direction
+hits=sign(fitted(reg_arima_btc)*btc$returns)
+cat("Correct predictions",length(hits[hits == 1]),"\n")
+cat("Incorrect predictions",length(hits[hits == -1]),"\n")
+cat("Hit ratio",length(hits[hits == 1])/length(hits))
+
+# our model's returns
+strat_ret = ts(cumsum(sign(fitted(reg_arima_btc))*btc$returns),
+                   start = c(2016,1),
+                   frequency = 365)
+# returns of longing instrument
+norm_ret = ts(cumsum(btc_ts),start = c(2016,1),
+              frequency = 365)
+autoplot(cbind(exp(norm_ret),exp(strat_ret)))
+```
+
+# Conclusion
+
+
