@@ -46,7 +46,6 @@ library(dplyr)
 library(prophet)
 library(fable.prophet)
 library(MAPA)
-library(MLmetrics)
 ```
 
 \newpage
@@ -84,7 +83,6 @@ coins <- crypto_history(coin_list = cl_final,
                         start_date = "20151231", interval="daily")
 relevant_vars <- c("timestamp","close","volume",
                    "open","high","low","market_cap")
-
 # create separate dfs for each variable
 btc <- filter(coins[relevant_vars],coins$slug=="bitcoin")
 btc_monthly <- filter(coins[relevant_vars],coins$slug=="bitcoin")
@@ -94,7 +92,6 @@ usdt <- filter(coins[relevant_vars],coins$slug=="tether")
 usdt_monthly <- filter(coins[relevant_vars],coins$slug=="tether")
 xrp <- filter(coins[relevant_vars],coins$slug=="xrp")
 xrp_monthly <- filter(coins[relevant_vars],coins$slug=="xrp")
-
 # subset by monthly
 btc_monthly$timestamp <- floor_date(btc_monthly$timestamp, "monthly")
 eth_monthly$timestamp <- floor_date(eth_monthly$timestamp, "monthly")
@@ -108,7 +105,6 @@ usdt_monthly <- usdt_monthly %>%
   group_by(timestamp) %>% summarize(close = mean(close))
 xrp_monthly <- xrp_monthly %>%
   group_by(timestamp) %>% summarize(close = mean(close))
-
 # convert POSIXct to date time
 btc$timestamp <- as.Date(btc$timestamp)
 eth$timestamp <- as.Date(eth$timestamp)
@@ -118,7 +114,6 @@ btc_monthly$timestamp <- as.Date(btc_monthly$timestamp)
 eth_monthly$timestamp <- as.Date(eth_monthly$timestamp)
 usdt_monthly$timestamp <- as.Date(usdt_monthly$timestamp)
 xrp_monthly$timestamp <- as.Date(xrp_monthly$timestamp)
-
 # create returns column 
 btc$returns <- c(NA,diff(log(btc$close)))
 eth$returns <- c(NA,diff(log(eth$close)))
@@ -128,7 +123,6 @@ btc_monthly$returns <- c(NA,diff(log(btc_monthly$close)))
 eth_monthly$returns <- c(NA,diff(log(eth_monthly$close)))
 usdt_monthly$returns <- c(NA,diff(log(usdt_monthly$close)))
 xrp_monthly$returns <- c(NA,diff(log(xrp_monthly$close)))
-
 # remove NAs
 btc <- na.omit(btc)
 eth <- na.omit(eth)
@@ -138,12 +132,10 @@ btc_monthly <- na.omit(btc_monthly)
 eth_monthly <- na.omit(eth_monthly)
 usdt_monthly <- na.omit(usdt_monthly)
 xrp_monthly <- na.omit(xrp_monthly)
-
 btc_ts <- ts(btc$returns, frequency = 365, start = c(2016,1))
 eth_ts <- ts(eth$returns, frequency = 365, start = c(2016,1))
 usdt_ts <- ts(usdt$returns, frequency = 365, start = c(2016,1))
 xrp_ts <- ts(xrp$returns, frequency = 365, start = c(2016,1))
-
 btc_ts2 <- ts(btc_monthly$returns, frequency = 12, start = c(2016,1))
 eth_ts2 <- ts(eth_monthly$returns, frequency = 12, start = c(2016,1))
 usdt_ts2 <- ts(usdt_monthly$returns, frequency = 12, start = c(2016,1))
@@ -153,6 +145,7 @@ xrp_ts2 <- ts(xrp_monthly$returns, frequency = 12, start = c(2016,1))
 \newpage
 
 # II. Results  
+
 ## A) Time Series Plots
 
 From the first graph of all the returns series, we can see that XRP has had the highest volatility. Meanwhile, USDT has the most stable returns.
@@ -161,8 +154,7 @@ From the first graph of all the returns series, we can see that XRP has had the 
 # plot returns together together
 returns <- data.frame(btc_ts,eth_ts,usdt_ts,xrp_ts)
 rownames(returns) <- btc$timestamp
-chart.TimeSeries(returns, 
-      legend.loc="bottom", 
+chart.TimeSeries(returns, legend.loc="bottom", 
       main="Daily Returns of BTC, ETH, USDT,XRP",) 
 ```
 
@@ -226,7 +218,6 @@ There is no correlation between BTC's returns and USDT's data.
 # BTC returns and USDT data
 usdt_data <- data.frame(btc$returns,usdt$volume,usdt$open,usdt$low,usdt$high,
                        usdt$close,usdt$market_cap,usdt$returns)
-
 ggcorr(usdt_data)
 ```
 
@@ -272,8 +263,6 @@ reg_arima_btc <- auto.arima(btc_tib[,"returns"], xreg=cbind(eth$returns,xrp$retu
 summary(reg_arima_btc)
 ```
 
-**INTERPRET**
-
 ```{r}
 arima_fit <- ts(arima_btc$fitted,frequency = 365, start = c(2016,1))
 reg_arima_fit <- ts(reg_arima_btc$fitted,frequency = 365, start = c(2016,1))
@@ -294,7 +283,7 @@ ggtsdisplay(resid(arima_btc),main = "ARIMA Residuals", ylab = "Percentage")
 ggtsdisplay(resid(reg_arima_btc), main = "Regression + ARIMA Residuals", ylab = "Percentage")
 ```
 
-There is not much of a linear relationship between the fit and the residuals, suggesting that our model's fit did pretty well.
+There is not much of a linear relationship between the fit and the residuals, suggesting that our models fit did pretty well.
 
 ```{r warning=FALSE}
 plot_resid_fit <- function(x,y,title) {
@@ -311,10 +300,11 @@ plot_resid_fit(fitted(arima_btc),resid(arima_btc),"ARIMA")
 plot_resid_fit(fitted(reg_arima_btc),resid(reg_arima_btc),"Regression + ARIMA")
 ```
 
+There is no linear relationship between the fit and the residuals. Suggesting our model did quite well.
+
 ### Recursive Residuals 
 
-**INTERPRET**
-
+According to our recursive CUSUM test, the fluctuation process remains well within the confidence bands meaning that there is no structural break in our ARIMA model.
 ```{r}
 par(mfrow=c(1,2))
 y = recresid(arima_btc$res ~ 1)
@@ -322,7 +312,7 @@ plot(y, pch = 16, main = "ARIMA", ylab = "Recursive Residuals")
 plot(efp(arima_btc$residuals~1, type = "Rec-CUSUM"))
 ```
 
-**INTERPRET** The recursive residuals are scattered around 0 and do not show any dynamics, reaffirming that the Regression + Arima Fit is a good model. 
+The recursive residuals are scattered around 0 and do not show any dynamics, reaffirming that the Regression + ARIMA Fit is a good model. However, the process does protrude the confidence bands, suggesting that there may be structural breaks in the model.
 
 ```{r}
 par(mfrow=c(1,2))
@@ -331,17 +321,19 @@ plot(y, pch = 16, main = "Regression + ARIMA", ylab = "Recursive Residuals")
 plot(efp(reg_arima_btc$residuals~1, type = "Rec-CUSUM"))
 ```
 
-## E) ETS
+## E) ETS, Regression + ETS  
+We will utilise monthly data instead of daily data to build the ETS models otherwise they don't work.  
+
 ### Fitting the Model
 
-**INTERPRET**
+The ETS model suggested by R is an additive one. The RMSE of this model is larger than the Regression + ARIMA model developed above. This suggests its performance may not be as good.
 
 ```{r}
 ets_btc <- ets(btc_ts2)
 summary(ets_btc)
 ```
 
-**INTERPRET**
+Now we fit a Regression + ETS model to the data. It has a lower RMSE than the vanilla ETS model. This suggests that the relationship between BTC and ETH is important in modelling the return dynamics of BTC. The ETS component of this model is also an additive smoothing model.
 
 ```{r}
 btc_eth_lm <- lm(btc_monthly$returns~eth_monthly$returns)
@@ -350,7 +342,7 @@ reg_ets_btc <- ets(btc_lm_res_ts)
 summary(reg_ets_btc)
 ```
 
-**INTERPRET**
+Looking at the actual fit of the data, we can see that although the Regression + ETS model looks better analytically, the plain ETS model provides much more information than the Regression + ETS model. Whereas the ETS model attempts to map to the data, the Regression + ETS model is simply a straight line.
 
 ```{r}
 autoplot(btc_ts2, series="BTC Series", col="black") + ggtitle("Model Fit") +
@@ -361,14 +353,14 @@ autoplot(btc_ts2, series="BTC Series", col="black") + ggtitle("Model Fit") +
 
 ### ACF/PACF of Residuals
 
-**INTERPRET**
+The ACF and PACF of residuals for both models show little structure. Although it would be a stretch to say that the models fit well to the data, the residual ACF and PACF plots at least suggest that the ETS models are reasonable fits.
 
 ```{r}
 ggtsdisplay(resid(ets_btc),main = "ETS Residuals", ylab = "Percentage")
 ggtsdisplay(resid(reg_ets_btc),main = "Regression + ETS Residuals", ylab = "Percentage")
 ```
 
-**INTERPRET**
+The Residuals vs Fitted plots for both ETS models show that there is a slight negative linear correlation between the fit and the data. Therefore, there are still dynamics that can be captured, which the ETS models have not caught on to.
 
 ```{r}
 plot_resid_fit(fitted(ets_btc),resid(ets_btc),"ETS")
@@ -377,7 +369,7 @@ plot_resid_fit(fitted(reg_ets_btc),resid(reg_ets_btc),"Regression + ETS")
 
 ### Recursive Residuals
 
-**INTERPRET**
+According to our recursive CUSUM test, the fluctuation process remains well within the confidence bands meaning that there is no structural break in our ETS model.
 
 ```{r}
 par(mfrow=c(1,2))
@@ -386,7 +378,7 @@ plot(y, pch = 16, main = "ETS", ylab = "Recursive Residuals")
 plot(efp(ets_btc$residuals~1, type = "Rec-CUSUM"))
 ```
 
-**INTERPRET**
+The recursive residuals are scattered around 0 and do not show any dynamics, reaffirming that the Regression + ARIMA Fit is a good model. However, the process does protrude the confidence bands, suggesting that there may be structural breaks in the model.
 
 ```{r}
 par(mfrow=c(1,2))
@@ -395,24 +387,26 @@ plot(y, pch = 16, main = "Regression + ETS", ylab = "Recursive Residuals")
 plot(efp(reg_ets_btc$residuals~1, type = "Rec-CUSUM"))
 ```
 
-## F) Holt-Winters
+## F) Holt-Winters  
+We will utilise monthly data instead of daily data to build the Holt-Winters models otherwise they don't work.  
+
 ### Fitting the Model
 
-**INTERPRET**
+The Holt-Winters model with additive seasonality has a slightly lower RMSE than the pure ETS model above, so it may be a better preditive model. Utilising seasonality can help us capture any seasonal variations in the monthly returns.
 
 ```{r}
 hw_btc <- hw(btc_ts2,seasonal=c("additive"))
 summary(hw_btc)
 ```
 
-**INTERPRET**
+The Regression + Holt-Winters model with additive seasonality has a slightly lower RMSE than the pure Holt-Winters model above, so it may be a better. However, it may also give us a flat set of fitted values like the Regression + ETS models. Next, we will graphically evaluate its performance against the pure Holt-Winters model.
 
 ```{r}
 reg_hw_btc <- hw(btc_lm_res_ts,seasonal=c("additive"))
 summary(reg_ets_btc)
 ```
 
-**INTERPRET**
+Unlike the Regression + ETS, the Regression + Holt-Winters model shows fluctuating predictions. Since it has a lower RMSE and MAPE than the pure Holt-Winters model, we prefer it.
 
 ```{r}
 autoplot(btc_ts2, series="BTC Series", col="black") + ggtitle("Model Fit") +
@@ -423,14 +417,14 @@ autoplot(btc_ts2, series="BTC Series", col="black") + ggtitle("Model Fit") +
 
 ### ACF/PACF of Residuals
 
-**INTERPRET**
+The ACF/PACF plots of the Holt-Winters models show little structure, suggesting the models did well in capturing BTC's monthly returns dynamics.
 
 ```{r}
 ggtsdisplay(resid(hw_btc),main = "HW Residuals", ylab = "Percentage")
 ggtsdisplay(resid(reg_hw_btc),main = "Regression + HW Residuals", ylab = "Percentage")
 ```
 
-**INTERPRET**
+There is a slight negative correlation between the residuals and fitted values, suggesting that both models did not capture some of the return series' dynamics.
 
 ```{r}
 plot_resid_fit(fitted(hw_btc),resid(hw_btc),"HW")
@@ -439,7 +433,7 @@ plot_resid_fit(fitted(reg_hw_btc),resid(reg_hw_btc),"Regression + HW")
 
 ### Recursive Residuals
 
-**INTERPRET**
+According to our recursive CUSUM test, the fluctuation process remains well within the confidence bands meaning that there is no structural break in our Holt-Winters model.
 
 ```{r}
 par(mfrow=c(1,2))
@@ -448,7 +442,7 @@ plot(y, pch = 16, main = "HW  Residuals", ylab = "Recursive Residuals")
 plot(efp(hw_btc$residuals~1, type = "Rec-CUSUM"))
 ```
 
-**INTERPRET**
+According to our recursive CUSUM test, the fluctuation process remains well within the confidence bands meaning that there is no structural break in our Regression + Holt-Winters model.
 
 ```{r}
 par(mfrow=c(1,2))
@@ -466,13 +460,10 @@ We will fit a NNETAR model to BTC Returns, as well as a NNETAR model consisting 
 nnar_btc <- nnetar(btc_ts)
 btc_eth_lm <- lm(returns$btc~returns$eth_ts)
 reg_nnar_btc <- nnetar(btc_eth_lm$residuals, xreg=cbind(returns$btc_ts,returns$eth_ts))
-
 nnar_fit <- ts(nnar_btc$fitted,frequency = 365, start = c(2016,1))
 reg_nnar_fit <- ts(reg_nnar_btc$fitted,frequency = 365, start = c(2016,1))
-
 autoplot(btc_ts, series="BTC Returns", color="black", alpha = 0.9) +
   autolayer(nnar_fit, series="NNAR", alpha = 0.9) + ggtitle("Model Fit")
-
 autoplot(btc_ts, series="BTC Returns", color="black", alpha = 0.9) +
   autolayer(reg_nnar_fit, series="Regression + NNAR", alpha = 0.9) +
   ggtitle("Model Fit")
@@ -487,7 +478,7 @@ ggtsdisplay(resid(nnar_btc),main = "NNAR Residuals", ylab = "Percentage")
 ggtsdisplay(resid(reg_nnar_btc),main = "Regression + NNAR Residuals", ylab = "Percentage")
 ```
 
-**INTERPRET**
+The NNETAR's Residuals vs Fit plot shows that there is a clear linear correlation between the residuals and the fit. Thus, it is not a strong model. On the other hand, the Linear Regression + NNETAR Residuals vs Fit plot shows practically no relationship between the fitted values and residuals, affirming that it is a good model.
 
 ```{r warning=FALSE}
 plot_resid_fit(fitted(nnar_btc),resid(nnar_btc),"NNAR")
@@ -495,8 +486,6 @@ plot_resid_fit(fitted(reg_nnar_btc),resid(reg_nnar_btc),"Regression + NNAR")
 ```
 
 ### Recursive Residuals
-
-**INTERPRET**
 
 The recursive residuals from the Regression + NNETAR model reaffirm that this model is a good fit. Thus, we will continue and forecast with this fit. 
 
@@ -507,8 +496,6 @@ plot(y, pch = 16, main = "NNAR  Residuals", ylab = "Recursive Residuals")
 plot(efp(nnar_btc$residuals~1, type = "Rec-CUSUM"))
 ```
 
-**INTERPRET**
-
 ```{r}
 par(mfrow=c(1,2))
 y = recresid(reg_nnar_btc$res ~ 1)
@@ -518,6 +505,7 @@ plot(efp(reg_nnar_btc$residuals~1, type = "Rec-CUSUM"))
 
 ## H) MAPA
 
+The MAPA model does not fit to the data very well 
 ```{r}
 mapa_fit <- mapaest(btc_ts2,outplot=2, paral=2,type="es")
 mapa_for <- mapa(btc_ts2,conf.lvl=c(0.8,0.9,0.95,0.99),outplot=1)
@@ -547,9 +535,6 @@ plot(y, pch = 16, main = "Prophet", ylab = "Recursive Residuals")
 plot(efp(res~1, type = "Rec-CUSUM"))
 ```
 
-
-
-
 ## J) Train & Test Accuracy
 
 To test both the high frequency (arima/nnetar/prophet) and lower frequency models, we use training sets. We will predic the entire year of 2021 for both frequencies. With the high frequency models we will do a 365-step forecast while with the lower freuquency model we will do a 12-step forecast. We will use MAPE to compare our model accuracy.
@@ -559,50 +544,40 @@ train <- window(btc_ts, end=c(2020,365))
 train_eth <- window(eth_ts, end=c(2020,365))
 train_xrp <- window(xrp_ts, end=c(2020,365))
 test <- window(btc_ts, start=c(2021,1), end=c(2021,365))
-
 train2 <- window(btc_ts2, end=c(2020,12))
 train_eth2 <- window(eth_ts2, end=c(2020,12))
 train_xrp2 <- window(xrp_ts2, end=c(2020,12))
 test2 <- window(btc_ts2, start=c(2021,1), end=c(2021,12))
-
 btc_train <- as_tibble(btc) %>% filter(timestamp < "2021-01-01")
 eth_train <- eth %>% filter(timestamp < "2021-01-01")
 xrp_train <- xrp %>% filter(timestamp < "2021-01-01")
 btc_test <- as_tibble(btc) %>% filter(timestamp >= "2021-01-01") %>% filter(timestamp < "2022-01-01")
 eth_test <- as_tibble(eth) %>% filter(timestamp >= "2021-01-01") %>% filter(timestamp < "2022-01-01")
 xrp_test <- as_tibble(xrp) %>% filter(timestamp >= "2021-01-01") %>% filter(timestamp < "2022-01-01")
-
 btc_train2 <- as_tibble(btc_monthly) %>% filter(timestamp < "2021-01-01")
 eth_train2 <- eth_monthly %>% filter(timestamp < "2021-01-01")
 xrp_train2 <- xrp_monthly %>% filter(timestamp < "2021-01-01")
 btc_test2 <- as_tibble(btc_monthly) %>% filter(timestamp >= "2021-01-01") %>% filter(timestamp < "2022-01-01")
 eth_test2 <- as_tibble(eth_monthly) %>% filter(timestamp >= "2021-01-01") %>% filter(timestamp < "2022-01-01")
 xrp_test2 <- as_tibble(xrp_monthly) %>% filter(timestamp >= "2021-01-01") %>% filter(timestamp < "2022-01-01")
-
 eth_train$returns <- c(NA,diff(log(eth_train$close)))
 eth_test$returns <- c(NA,diff(log(eth_test$close)))
 eth_train <- na.omit(eth_train)
 eth_test <- na.omit(eth_test)
-
 eth_train2$returns <- c(NA,diff(log(eth_train2$close)))
 eth_test2$returns <- c(NA,diff(log(eth_test2$close)))
 xrp_train2$returns <- c(NA,diff(log(xrp_train2$close)))
 xrp_test2$returns <- c(NA,diff(log(xrp_test2$close)))
-
 btc_train2 <- na.omit(btc_train2)
 eth_train2 <- na.omit(eth_train2)
 xrp_train2 <- na.omit(xrp_train2)
-
 btc_test2 <- na.omit(btc_test2)
 eth_test2 <- na.omit(eth_test2)
 xrp_test2 <- na.omit(xrp_test2)
-
 btc_train2 <- btc_train2[2:nrow(btc_train2),]
-
 eth_monthly$returns <- c(NA,diff(log(eth_monthly$close)))
 usdt_monthly$returns <- c(NA,diff(log(usdt_monthly$close)))
 xrp_monthly$returns <- c(NA,diff(log(xrp_monthly$close)))
-
 h <- length(test)
 h2 <- length(test2)
 ```
@@ -667,9 +642,14 @@ PRO <- ts(PRO_for$yhat, start=c(2021,1), freq=365)
 MAPE(PRO, test)
 ```
 
+For the High Frequency models, we get a combined forecast that yields a MAPE of $18.57247$.
+For the Low Frequency models, we get a combined forecast that yields a MAPE of $1.342106$.
+
 ```{r}
 HIGH_COMBO <- (ARIMA + PRO + NNAR) / 3
+MAPE(HIGH_COMBO, test)
 LOW_COMBO <- (MAPA + HW + ETS) / 3
+MAPE(LOW_COMBO, test2)
 ```
 
 Let's plot the forecasts for both high and lower frequency models.
@@ -730,7 +710,7 @@ lines(vmod_eth_ts,col="red",lty=2)
 legend("bottomleft",legend=c("BTC","VAR"),text.col=1:4,bty = "o")
 ```
 
-**Interpretation**
+According to our recursive CUSUM test, the fluctuation process remains well within the confidence bands meaning that there is no structural break in our Holt-Winters model.
 
 ```{r}
 par(mfrow=c(1,2))
@@ -762,7 +742,7 @@ vmod_btc_xrp$varresult$btc_ts
 tsdisplay(vmod_btc_xrp$varresult$btc_ts$residuals)
 ```
 
-As with the orevious VAR model, the VAR model using ETH returns do not seem to capture any of the volatility in the BTC returns series. We will now train and test each VAR model (the first one using ETH returns and the second using XRP returns) in order to measure the MAPE to decide which VAR model performs better in predicting BTC returns. We will then compare this chosen model to our previous models to assess if we can outperfrom them.
+As with the previous VAR model, the VAR model using ETH returns does not seem to capture any of the volatility in the BTC returns series. We will now train and test each VAR model (the first one using ETH returns and the second using XRP returns) in order to measure the MAPE to decide which VAR model performs better in predicting BTC returns. We will then compare this chosen model to our previous models to assess if we can outperform them.
 
 ```{r}
 vmod_xrp_ts = ts(vmod_btc_xrp$varresult$btc_ts$fitted.values, start=c(2016,1),freq=365)
@@ -771,7 +751,7 @@ lines(vmod_xrp_ts,col="red",lty=2)
 legend("bottomleft",legend=c("BTC","VAR"),text.col=1:4,bty = "o")
 ```
 
-**Interpretation**
+The CUSUM test for recursive residuals shows that our model has no structural breaks.
 
 ```{r}
 par(mfrow=c(1,2))
@@ -792,14 +772,12 @@ y.eth.train=cbind(btc.train,eth.train)
 y_eth_train=data.frame(y.eth.train)
 vmod.eth.train=VAR(y_eth_train,p=4)
 vmod.eth.train.pred=predict(object=vmod.eth.train, n.ahead=12)
-
 #Train and test XRP VAR Model
 xrp.train <- window(xrp_ts, end=c(2021,1))
 y.xrp.train=cbind(btc.train,xrp.train)
 y_xrp_train=data.frame(y.xrp.train)
 vmod.xrp.train=VAR(y_xrp_train,p=2)
 vmod.xrp.train.pred=predict(object=vmod.xrp.train, n.ahead=12)
-
 #Compare MAPEs
 MAPE(vmod.eth.train.pred$model$varresult$btc.train$fitted.values, y_eth_train$btc.train[1:1822])
 MAPE(vmod.xrp.train.pred$model$varresult$btc.train$fitted.values, y_xrp_train$btc.train[1:1824])
@@ -814,6 +792,10 @@ plot(vmod.pred, xlim=c(2000,2275))
 
 ## L) Financial Performance & Interpretation
 
+Given the data and interpretations above, we will attempt to evaluate the financial performance of the models predicting the daily returns of BTC. 
+
+First, we evaluate the performance of the Regression + ARIMA model:  
+
 ```{r eval=FALSE, include=FALSE}
 # if hits == -1, then model predicted in wrong direction
 # if hits == 1, then model predicted in correct direction
@@ -821,24 +803,87 @@ hits=sign(fitted(reg_arima_btc)*btc$returns)
 cat("Correct predictions",length(hits[hits == 1]),"\n")
 cat("Incorrect predictions",length(hits[hits == -1]),"\n")
 cat("Hit ratio",length(hits[hits == 1])/length(hits))
-
 # our model's returns
 strat_ret = ts(cumsum(sign(fitted(reg_arima_btc))*btc$returns),
                    start = c(2016,1), frequency = 365)
 # returns of longing instrument
 norm_ret = ts(cumsum(btc_ts),start = c(2016,1),frequency = 365)
-autoplot(cbind(exp(norm_ret),exp(strat_ret)))
+autoplot(cbind(exp(norm_ret),exp(strat_ret)),
+         ylab = "Returns",
+         main = "Returns of Regression + ARIMA Model
+(In Sample No Transaction Costs)")
 ```
+
+The hit ratio is really good, and the returns of the Regression + ARIMA model are staggering. However, this brings into question whether or not there was leakage in the process of making predictions.
+
+Now we move onto calculating the financial returns of our Regression + NNETAR model.
+
+```{r eval=FALSE, include=FALSE}
+# if hits == -1, then model predicted in wrong direction
+# if hits == 1, then model predicted in correct direction
+hits=sign(fitted(reg_nnar_btc)*btc$returns)
+cat("Correct predictions",length(hits[hits == 1]),"\n")
+cat("Incorrect predictions",length(hits[hits == -1]),"\n")
+cat("Hit ratio",length(hits[hits == 1])/length(hits))
+# our model's returns
+
+strat_ret = ts(cumsum(sign(na.omit(reg_nnar_fit))*btc$returns[-1]),
+                   start = c(2016,1), frequency = 365)
+# returns of longing instrument
+norm_ret = ts(cumsum(btc_ts),start = c(2016,1),frequency = 365)
+autoplot(cbind(exp(norm_ret),exp(strat_ret)),
+         ylab = "Returns",
+         main = "Returns of Regression + NNETAR Model
+(In Sample No Transaction Costs)")
+```
+
+The hit ratio is surprisingly good, and the returns of the Regression + NNETAR model are fantastic, but questionable. Is this another sign of data leakage? Or did our model perform very well?
+
+```{r eval=FALSE, include=FALSE}
+# if hits == -1, then model predicted in wrong direction
+# if hits == 1, then model predicted in correct direction
+hits=sign(forecast_btc$yhat*btc$returns)
+cat("Correct predictions",length(hits[hits == 1]),"\n")
+cat("Incorrect predictions",length(hits[hits == -1]),"\n")
+cat("Hit ratio",length(hits[hits == 1])/length(hits))
+
+
+# our model's returns
+strat_ret = ts(cumsum(sign(forecast_btc$yhat)*btc$returns[]),
+                   start = c(2016,1), frequency = 365)
+# returns of longing instrument
+norm_ret = ts(cumsum(btc_ts),start = c(2016,1),frequency = 365)
+autoplot(cbind(exp(norm_ret),exp(strat_ret)),
+         ylab = "Returns",
+         main = "Returns of Prophet Model
+(In Sample No Transaction Costs)")
+```
+
+The hit ratio of the Prophet model is significantly lower than the other daily predictive models. However, this is given that we didn't incorporate ETH as a regression and only used a vanilla Prophet model.
+
+Nonetheless, this model achieved a hit accuracy of 55%, just slightly better than a coin flip. Although the returns aren't as good as the other models, they are quite good in any case.
 
 # III. Conclusion
 
-Make sure to explain why we did not use HW / ETS because they were not built for this high of frequency data and crashed our Rstudio so we supplemented with THIEF / MAPAS / TBATS.
+In the project, we predicted the returns for Bitcoin using a variety of models including ARIMA, ETS, Holt-Winters, VAR, NNETAR, MAPA, and more. For some of the models such as ARIMA and ETS, we also devised a regression, regressing the returns of BTC on the returns of ETH, which was identified as a significant variable because of its strong correlation with BTC's returns. 
+
+Due to technical limitations, different models had to be constructed based on different time frequencies. For instance, our ETS and Holt-Winters models were constructed from data on monthly returns, while the ARIMA model was developed based on the daily returns of BTC. 
+
+Training and testing sets were used to evaluate and measure the forecast performance of the models, and overall, the best performing model according to its MAPE was the Regression + ARIMA for modelling daily returns and the Regression + ETS for modelling monthly returns.
+
+In addition to measuring the accuracy of our models in this way, we also measured the financial performance of the models. In particular, we measured the returns of the models used to forecast daily returns, and this measurement affirmed that the Regression + ARIMA model was the best performing model as well.
+
+In the future, to measure financial performance, we could also incorporate ways to subtract transaction costs. In addition to that, we may also attempt to add other regressors to our models to improve their accuracy.
 
 # IV. References
 
+https://otexts.com/fpp3/
+
+https://robjhyndman.com/
+
 https://facebook.github.io/prophet/docs/quick_start.html
 
+http://www.econ.ucla.edu/rrojas/
 
-
-
+https://www.statology.org/aggregate-daily-data-in-r/
 
